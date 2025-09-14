@@ -1,0 +1,824 @@
+{{ define "admin_post_form" }}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    {{ template "head" . }}
+    <style>
+        {{ template "admin_header_styles" . }}
+        {{ template "common_styles" . }}
+        {{ template "admin_post_form_styles" . }}
+        {{ template "common_footer_styles" . }}
+    </style>
+</head>
+<body>
+    {{ template "admin_header" . }}
+    <main class="main">
+        {{ template "admin_post_form_content" . }}
+    </main>
+    {{ template "footer" . }}
+    {{ template "admin_post_form_scripts" . }}
+    {{ template "common_scripts" . }}
+</body>
+</html>
+{{ end }}
+
+{{ define "admin_post_form_styles" }}
+/* Styles spécifiques au formulaire d'article */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding: 30px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.page-title {
+    font-size: 2.2em;
+    font-weight: 700;
+    color: var(--dark-color);
+}
+
+.header-actions {
+    display: flex;
+    gap: 15px;
+}
+
+.form-container {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 30px;
+}
+
+.form-main {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    padding: 40px;
+}
+
+.form-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.sidebar-card {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    padding: 25px;
+}
+
+.sidebar-title {
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--dark-color);
+    font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-group {
+    margin-bottom: 30px;
+}
+
+.form-control-lg {
+    font-size: 1.3em;
+    padding: 18px 24px;
+    font-weight: 500;
+}
+
+textarea.form-control {
+    min-height: 400px;
+    resize: vertical;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Cascadia Code', monospace;
+    font-size: 0.95em;
+    line-height: 1.6;
+}
+
+.form-help {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 8px;
+    line-height: 1.4;
+}
+
+.tags-input {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 16px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    min-height: 60px;
+    align-items: flex-start;
+    background: white;
+    transition: var(--transition);
+}
+
+.tags-input:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+
+.tag-item {
+    background: var(--primary-color);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: var(--transition);
+}
+
+.tag-item:hover {
+    background: var(--primary-hover);
+}
+
+.tag-remove {
+    cursor: pointer;
+    font-weight: bold;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8em;
+}
+
+.tag-remove:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+.tag-input {
+    border: none;
+    outline: none;
+    flex: 1;
+    min-width: 120px;
+    padding: 8px 4px;
+    font-size: 0.9em;
+    background: transparent;
+}
+
+.tag-input::placeholder {
+    color: #999;
+}
+
+.preview-area {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 25px;
+    background: #fafafa;
+    max-height: 500px;
+    overflow-y: auto;
+    font-size: 0.9em;
+    line-height: 1.6;
+}
+
+.preview-area h1,
+.preview-area h2,
+.preview-area h3 {
+    color: var(--dark-color);
+    margin: 20px 0 10px;
+}
+
+.preview-area h1 {
+    font-size: 1.8em;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 8px;
+}
+
+.preview-area h2 {
+    font-size: 1.4em;
+    color: var(--primary-color);
+}
+
+.preview-area strong {
+    color: var(--dark-color);
+}
+
+.preview-area code {
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+
+.save-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.save-status {
+    padding: 15px;
+    border-radius: var(--border-radius);
+    font-size: 0.9em;
+    text-align: center;
+    font-weight: 500;
+}
+
+.save-status.saving {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.save-status.saved {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.save-status.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .form-container {
+        grid-template-columns: 1fr 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .form-container {
+        grid-template-columns: 1fr;
+    }
+
+    .form-sidebar {
+        order: -1;
+    }
+
+    .header-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 20px;
+    }
+
+    .form-main,
+    .sidebar-card {
+        padding: 25px;
+    }
+
+    textarea.form-control {
+        min-height: 300px;
+    }
+}
+
+.editor-toolbar {
+    display: flex;
+    gap: 5px;
+    padding: 10px;
+    background: #f8f9fa;
+    border: 2px solid var(--border-color);
+    border-bottom: none;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    flex-wrap: wrap;
+}
+
+.toolbar-btn {
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.toolbar-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.toolbar-btn-primary {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.toolbar-btn-primary:hover {
+    background: var(--primary-hover);
+}
+
+.toolbar-separator {
+    width: 1px;
+    background: #dee2e6;
+    margin: 0 5px;
+}
+
+.upload-progress {
+    margin-top: 10px;
+    padding: 15px;
+    background: #f0f8ff;
+    border: 1px solid #b0d4ff;
+    border-radius: var(--border-radius);
+}
+
+.progress-bar {
+    height: 20px;
+    background: #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #007bff, #0056b3);
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 0.9em;
+    color: #495057;
+}
+
+/* Ajuster le textarea pour qu'il s'accorde avec la toolbar */
+.editor-toolbar + .form-control {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+{{ end }}
+
+{{ define "admin_post_form_content" }}
+<div class="container" x-data="postForm">
+    <div class="page-header">
+        <h1 class="page-title">{{ if .isEdit }}✏️ Éditer l'article{{ else }}➕ Créer un nouvel article{{ end }}</h1>
+        <div class="header-actions">
+            <a href="/admin/posts" class="btn btn-primary">← Retour à la liste</a>
+            {{ if .isEdit }}
+            <a href="/post/{{ .post.ID }}" target="_blank" class="btn btn-success">👁️ Voir l'article</a>
+            {{ end }}
+        </div>
+    </div>
+
+    <form @submit.prevent="savePost">
+        <div class="form-container">
+            <div class="form-main">
+                <!-- Titre -->
+                <div class="form-group">
+                    <label class="form-label" for="title">📝 Titre de l'article *</label>
+                    <input x-model="post.title" 
+                           id="title" 
+                           type="text" 
+                           class="form-control form-control-lg"
+                           placeholder="Entrez un titre accrocheur pour votre article"
+                           required>
+                    <div class="form-help">Le titre apparaît sur la page d'accueil et dans les résultats de recherche</div>
+                </div>
+
+                <!-- Extrait -->
+                <div class="form-group">
+                    <label class="form-label" for="excerpt">📋 Résumé/Extrait</label>
+                    <textarea x-model="post.excerpt" 
+                              id="excerpt" 
+                              class="form-control"
+                              rows="4"
+                              placeholder="Un résumé engageant de votre article (optionnel mais recommandé)"></textarea>
+                    <div class="form-help">Affiché sur la page d'accueil et dans les résultats de recherche. Idéal : 120-160 caractères.</div>
+                </div>
+
+                <!-- Contenu -->
+                <div class="form-group">
+    <label class="form-label" for="content">📖 Contenu (Markdown) *</label>
+    
+    <!-- Barre d'outils pour l'éditeur -->
+    <div class="editor-toolbar">
+        <button type="button" @click="insertBold" class="toolbar-btn" title="Gras">
+            <strong>B</strong>
+        </button>
+        <button type="button" @click="insertItalic" class="toolbar-btn" title="Italique">
+            <em>I</em>
+        </button>
+        <button type="button" @click="insertCode" class="toolbar-btn" title="Code">
+            <code>&lt;/&gt;</code>
+        </button>
+        <button type="button" @click="insertLink" class="toolbar-btn" title="Lien">
+            🔗
+        </button>
+        <button type="button" @click="insertHeading" class="toolbar-btn" title="Titre">
+            H
+        </button>
+        <div class="toolbar-separator"></div>
+        <button type="button" @click="$refs.imageUpload.click()" class="toolbar-btn toolbar-btn-primary" title="Insérer une image">
+            📷 Image
+        </button>
+        <input type="file" 
+               x-ref="imageUpload" 
+               @change="uploadImage($event)" 
+               accept="image/*" 
+               style="display: none;">
+    </div>
+    
+    <textarea x-model="post.content" 
+              x-ref="contentEditor"
+              @input="updatePreview"
+              id="content" 
+              class="form-control"
+              placeholder="# Votre titre principal..."
+              required></textarea>
+              
+    <!-- Zone de progression d'upload -->
+    <div x-show="uploading" class="upload-progress">
+        <div class="progress-bar">
+            <div class="progress-fill" :style="`width: ${uploadProgress}%`"></div>
+        </div>
+        <span class="progress-text">Upload en cours... <span x-text="uploadProgress"></span>%</span>
+    </div>
+    
+    <div class="form-help">
+        <strong>Support Markdown :</strong> **gras**, *italique*, `code`, [liens](url), images, listes, etc.
+        <br>Cliquez sur 📷 pour uploader une image (max 5MB).
+    </div>
+</div>
+            </div>
+
+            <div class="form-sidebar">
+                <!-- Actions de sauvegarde -->
+                <div class="sidebar-card">
+                    <h3 class="sidebar-title">💾 Publication</h3>
+                    
+                    <div x-show="saveStatus" class="save-status" :class="saveStatus" x-text="saveMessage"></div>
+                    
+                    <div class="save-actions">
+                        <button type="submit" 
+                                :disabled="saving || !post.title.trim() || !post.content.trim()" 
+                                class="btn btn-success">
+                            <span x-show="!saving">{{ if .isEdit }}💾 Mettre à jour{{ else }}🚀 Publier l'article{{ end }}</span>
+                            <span x-show="saving">⏳ Enregistrement...</span>
+                        </button>
+                        
+                        <a href="/admin/posts" class="btn btn-primary">❌ Annuler</a>
+                        
+                        {{ if .isEdit }}
+                        <button type="button" 
+                                @click="confirmDelete" 
+                                class="btn btn-danger">
+                            🗑️ Supprimer l'article
+                        </button>
+                        {{ end }}
+                    </div>
+                </div>
+
+                <!-- Auteur -->
+                {{ if not .isEdit }}
+                <div class="sidebar-card">
+                    <h3 class="sidebar-title">👤 Auteur</h3>
+                    <input x-model="post.author" 
+                           type="text" 
+                           class="form-control"
+                           placeholder="Nom de l'auteur">
+                    <div class="form-help">Laissez vide pour utiliser votre nom d'utilisateur</div>
+                </div>
+                {{ end }}
+
+                <!-- Tags -->
+                <div class="sidebar-card">
+                    <h3 class="sidebar-title">🏷️ Tags</h3>
+                    <div class="tags-input" @click="$refs.tagInput.focus()">
+                        <template x-for="(tag, index) in post.tags" :key="index">
+                            <span class="tag-item">
+                                <span x-text="tag"></span>
+                                <span class="tag-remove" @click="removeTag(index)">×</span>
+                            </span>
+                        </template>
+                        <input x-ref="tagInput"
+                               x-model="newTag"
+                               @keydown.enter.prevent="addTag"
+                               @keydown.comma.prevent="addTag"
+                               @keydown.space.prevent="addTag"
+                               type="text"
+                               class="tag-input"
+                               placeholder="Ajouter des tags...">
+                    </div>
+                    <div class="form-help">Appuyez sur Entrée, Espace ou Virgule pour ajouter un tag</div>
+                </div>
+
+                <!-- Aperçu -->
+                <div class="sidebar-card">
+                    <h3 class="sidebar-title">👁️ Aperçu en temps réel</h3>
+                    <div class="preview-area" x-html="preview"></div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{{ end }}
+
+{{ define "admin_post_form_scripts" }}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('postForm', () => ({
+        post: {
+            title: {{ if .isEdit }}'{{ .post.Title }}'{{ else }}''{{ end }},
+            content: {{ if .isEdit }}`{{ .post.Content }}`{{ else }}''{{ end }},
+            excerpt: {{ if .isEdit }}'{{ .post.Excerpt }}'{{ else }}''{{ end }},
+            author: {{ if .isEdit }}'{{ .post.Author }}'{{ else }}''{{ end }},
+            tags: {{ if .isEdit }}{{ .post.TagsList | printf "%#v" }}{{ else }}[]{{ end }}
+        },
+        uploading: false,
+        uploadProgress: 0,
+        newTag: '',
+        preview: '',
+        saving: false,
+        saveStatus: '',
+        saveMessage: '',
+        isEdit: {{ .isEdit }},
+        postId: {{ if .isEdit }}{{ .post.ID }}{{ else }}null{{ end }},
+
+        init() {
+            this.updatePreview();
+            
+            // Auto-save toutes les 30 secondes si le contenu a changé
+            setInterval(() => {
+                if (this.isEdit && this.hasUnsavedChanges()) {
+                    this.autoSave();
+                }
+            }, 30000);
+        },
+
+        hasUnsavedChanges() {
+            // Logique simple pour détecter les changements
+            return this.post.title.length > 0 && this.post.content.length > 0;
+        },
+
+        async autoSave() {
+            if (this.saving) return;
+            
+            this.saveStatus = 'saving';
+            this.saveMessage = 'Sauvegarde automatique...';
+            
+            try {
+                const response = await fetch(`/admin/posts/${this.postId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.post)
+                });
+
+                if (response.ok) {
+                    this.saveStatus = 'saved';
+                    this.saveMessage = 'Brouillon sauvegardé automatiquement';
+                    setTimeout(() => {
+                        this.saveStatus = '';
+                    }, 3000);
+                }
+            } catch (error) {
+                console.error('Erreur auto-save:', error);
+            }
+        },
+
+        addTag() {
+            const tag = this.newTag.trim().toLowerCase();
+            if (tag && !this.post.tags.includes(tag)) {
+                this.post.tags.push(tag);
+                this.newTag = '';
+            }
+        },
+
+        removeTag(index) {
+            this.post.tags.splice(index, 1);
+        },
+
+        updatePreview() {
+            // Rendu Markdown simplifié pour la prévisualisation
+            let html = this.post.content
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+                .replace(/`(.*?)`/gim, '<code>$1</code>')
+                .replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>')
+                .replace(/^\- (.*$)/gim, '<li>$1</li>')
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2">$1</a>')
+                .replace(/\n\n/gim, '</p><p>')
+                .replace(/\n/gim, '<br>');
+            
+            // Wrap les listes
+            html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+            
+            this.preview = html ? '<p>' + html + '</p>' : '<p><em>La prévisualisation apparaîtra ici...</em></p>';
+        },
+
+    async uploadImage(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Vérifier le type
+        if (!file.type.startsWith('image/')) {
+            window.showNotification('Veuillez sélectionner une image', 'error');
+            return;
+        }
+
+        // Vérifier la taille (10MB)
+        if (file.size > 10 * 1024 * 1024) {
+            window.showNotification('Image trop grande (max 10MB)', 'error');
+            return;
+        }
+
+        this.uploading = true;
+        this.uploadProgress = 0;
+
+        const formData = new FormData();
+        formData.append('image', file);
+
+        try {
+            // Simuler la progression (pour une meilleure UX)
+            const progressInterval = setInterval(() => {
+                if (this.uploadProgress < 90) {
+                    this.uploadProgress += 10;
+                }
+            }, 100);
+
+            const response = await fetch('/admin/upload/image', {
+                method: 'POST',
+                body: formData
+            });
+
+            clearInterval(progressInterval);
+            this.uploadProgress = 100;
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Erreur upload');
+            }
+
+            const data = await response.json();
+            
+            // Insérer le markdown de l'image dans le textarea
+            const imageMarkdown = `![${file.name}](${data.url})\n`;
+            this.insertAtCursor(imageMarkdown);
+            
+            window.showNotification('Image uploadée avec succès', 'success');
+            
+            // Réinitialiser l'input file
+            this.$refs.imageUpload.value = '';
+            
+        } catch (error) {
+            console.error('Erreur upload:', error);
+            window.showNotification('Erreur lors de l\'upload: ' + error.message, 'error');
+        } finally {
+            this.uploading = false;
+            this.uploadProgress = 0;
+        }
+    },
+
+    insertAtCursor(text) {
+        const textarea = this.$refs.contentEditor;
+        const startPos = textarea.selectionStart;
+        const endPos = textarea.selectionEnd;
+        
+        this.post.content = 
+            this.post.content.substring(0, startPos) +
+            text +
+            this.post.content.substring(endPos);
+        
+        // Repositionner le curseur
+        this.$nextTick(() => {
+            textarea.selectionStart = startPos + text.length;
+            textarea.selectionEnd = startPos + text.length;
+            textarea.focus();
+            this.updatePreview();
+        });
+    },
+
+    // Méthodes pour la toolbar
+    insertBold() {
+        const selection = this.getSelection();
+        const text = selection ? `**${selection}**` : '**texte en gras**';
+        this.insertAtCursor(text);
+    },
+
+    insertItalic() {
+        const selection = this.getSelection();
+        const text = selection ? `*${selection}*` : '*texte en italique*';
+        this.insertAtCursor(text);
+    },
+
+    insertCode() {
+        const selection = this.getSelection();
+        const text = selection ? `\`${selection}\`` : '`code`';
+        this.insertAtCursor(text);
+    },
+
+    insertLink() {
+        const selection = this.getSelection();
+        const text = '[' + (selection || 'texte du lien') + '](https://exemple.com)';
+        this.insertAtCursor(text);
+    },
+
+    insertHeading() {
+        const selection = this.getSelection();
+        const text = '## ' + (selection || 'Titre');
+        this.insertAtCursor(text);
+    },
+
+    getSelection() {
+        const textarea = this.$refs.contentEditor;
+        return this.post.content.substring(
+            textarea.selectionStart,
+            textarea.selectionEnd
+        );
+    },
+
+        async savePost() {
+            this.saving = true;
+            this.saveStatus = 'saving';
+            this.saveMessage = 'Sauvegarde en cours...';
+            
+            try {
+                const url = this.isEdit ? `/admin/posts/${this.postId}` : '/admin/posts';
+                const method = this.isEdit ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.post)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    this.saveStatus = 'saved';
+                    this.saveMessage = data.message;
+                    window.showNotification(data.message, 'success');
+                    
+                    if (!this.isEdit && data.post_id) {
+                        // Rediriger vers l'édition du nouvel article
+                        setTimeout(() => {
+                            window.location.href = `/admin/posts/${data.post_id}/edit`;
+                        }, 1500);
+                    } else {
+                        // Rester sur la page
+                        setTimeout(() => {
+                            this.saveStatus = '';
+                        }, 3000);
+                    }
+                } else {
+                    this.saveStatus = 'error';
+                    this.saveMessage = 'Erreur: ' + data.error;
+                    window.showNotification('Erreur: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erreur sauvegarde:', error);
+                this.saveStatus = 'error';
+                this.saveMessage = 'Erreur de connexion';
+                window.showNotification('Erreur lors de la sauvegarde', 'error');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        confirmDelete() {
+            if (confirm(`Êtes-vous sûr de vouloir supprimer l'article "${this.post.title}" ?\n\n⚠️ Cette action est irréversible !`)) {
+                this.deletePost();
+            }
+        },
+
+        async deletePost() {
+            try {
+                const response = await fetch(`/admin/posts/${this.postId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    window.showNotification('Article supprimé avec succès', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/admin/posts';
+                    }, 1000);
+                } else {
+                    window.showNotification('Erreur: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erreur suppression:', error);
+                window.showNotification('Erreur lors de la suppression', 'error');
+            }
+        }
+    }));
+});
+</script>
+{{ end }}

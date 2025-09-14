@@ -1,0 +1,34 @@
+{{ define "public_header" }}
+<div class="header">
+    <div class="container">
+        <nav class="nav">
+            <a href="/" class="logo">{{ if .siteName }}{{ .siteName }}{{ else }}Mon Blog Tech{{ end }}</a> {{ .description }}
+            <div class="nav-actions">
+                {{ if .showSearch }}
+                <div x-data="searchComponent" class="search-container">
+                    <input x-model="query" 
+                           @input.debounce.300ms="search" 
+                           @focus="showResults = true"
+                           @click.away="showResults = false"
+                           class="search-input"
+                           placeholder="🔍 Rechercher...">
+                    
+                    <div x-show="showResults && results.length > 0" class="search-results">
+                        <template x-for="post in results" :key="post.id">
+                            <a :href="'/post/' + post.id" class="search-result">
+                                <div class="search-result-title" x-text="post.title"></div>
+                                <div class="search-result-excerpt" x-text="post.excerpt"></div>
+                            </a>
+                        </template>
+                    </div>
+                </div>
+                {{ end }}
+                
+                {{ if .isAuthenticated }}
+                <a href="/admin" class="btn btn-primary btn-sm">🔐 Administration</a>
+                {{ end }}
+            </div>
+        </nav>
+    </div>
+</div>
+{{ end }}

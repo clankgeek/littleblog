@@ -1,0 +1,615 @@
+{{ define "posts" }}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    {{ template "head" . }}
+    <style>
+        {{ template "common_styles" . }}
+        {{ template "common_footer_styles" . }}
+        {{ template "public_header_styles" . }}
+        {{ template "posts_styles" . }}
+    </style>
+</head>
+<body>
+    {{ template "public_header" . }}
+    <main class="main">
+        {{ template "posts_content" . }}
+    </main>
+    {{ template "footer" . }}
+    {{ template "posts_scripts" . }}
+    {{ template "common_scripts" . }}
+</body>
+</html>
+{{ end }}
+{{ define "posts_styles" }}
+/* Styles spécifiques à l'article */
+.article-card {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    margin-bottom: 30px;
+}
+
+.article-header {
+    padding: 40px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--gradient);
+    color: white;
+    text-align: center;
+}
+
+.article-title {
+    font-size: 2.5em;
+    font-weight: 800;
+    margin-bottom: 20px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.article-meta {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    opacity: 0.9;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.article-tags {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.tag {
+    background: rgba(255,255,255,0.2);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+.article-content {
+    padding: 40px;
+    font-size: 1.1em;
+    line-height: 1.8;
+}
+
+/* Styles Markdown */
+.article-content h1,
+.article-content h2,
+.article-content h3,
+.article-content h4,
+.article-content h5,
+.article-content h6 {
+    color: var(--dark-color);
+    margin: 30px 0 15px;
+    font-weight: 700;
+}
+
+.article-content h1 {
+    font-size: 2em;
+    border-bottom: 3px solid var(--primary-color);
+    padding-bottom: 10px;
+}
+
+.article-content h2 {
+    font-size: 1.6em;
+    color: var(--primary-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 5px;
+}
+
+.article-content h3 {
+    font-size: 1.3em;
+    color: #444;
+}
+
+.article-content p {
+    margin-bottom: 20px;
+}
+
+.article-content ul,
+.article-content ol {
+    margin: 20px 0;
+    padding-left: 30px;
+}
+
+.article-content li {
+    margin-bottom: 8px;
+}
+
+.article-content blockquote {
+    border-left: 4px solid var(--primary-color);
+    padding: 20px;
+    margin: 30px 0;
+    font-style: italic;
+    background: var(--light-color);
+    border-radius: var(--border-radius);
+}
+
+.article-content pre {
+    background: #2d3748;
+    color: #e2e8f0;
+    padding: 25px;
+    border-radius: var(--border-radius);
+    overflow-x: auto;
+    margin: 25px 0;
+    box-shadow: var(--shadow);
+}
+
+.article-content pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+    font-family: 'Fira Code', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+    font-size: 0.9em;
+    line-height: 1.5;  
+    border: none;
+}
+
+.article-content code {
+    background: var(--light-color);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: 'Fira Code', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+    font-size: 0.9em;
+    border: 1px solid var(--border-color);
+}
+
+.article-content strong {
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.article-content em {
+    font-style: italic;
+    color: #555;
+}
+
+.article-content table {
+    border-collapse: collapse;
+    margin: 25px 0;
+    width: 100%;
+    box-shadow: var(--shadow);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+.article-content table th,
+.article-content table td {
+    border: 1px solid var(--border-color);
+    padding: 12px 15px;
+    text-align: left;
+}
+
+.article-content table th {
+    background: var(--light-color);
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.article-content table tr:nth-child(even) {
+    background: #fafafa;
+}
+
+.article-content table tr:hover {
+    background: #f0f8ff;
+}
+
+.article-content a {
+    color: var(--primary-color);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: var(--transition);
+}
+
+.article-content a:hover {
+    color: var(--primary-hover);
+    border-bottom-color: var(--primary-color);
+}
+
+.article-content del {
+    color: #666;
+    text-decoration: line-through;
+}
+
+.article-content hr {
+    border: none;
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--border-color), transparent);
+    margin: 40px 0;
+}
+
+/* Actions */
+.actions {
+    padding: 30px 40px;
+    background: var(--light-color);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.btn-like.liked {
+    background: var(--danger-color);
+    color: white;
+}
+
+.btn-like.liked:hover {
+    background: #c82333;
+}
+
+.btn-outline {
+    background: white;
+    color: var(--dark-color);
+    border: 2px solid var(--border-color);
+}
+
+.btn-outline:hover {
+    background: var(--dark-color);
+    color: white;
+    border-color: var(--dark-color);
+}
+
+/* Comments */
+.comments-section {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.comments-header {
+    padding: 25px 40px;
+    background: var(--light-color);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.comments-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.comment {
+    padding: 25px 40px;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s;
+}
+
+.comment:hover {
+    background: #fafafa;
+}
+
+.comment:last-child {
+    border-bottom: none;
+}
+
+.comment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.comment-author {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.comment-date {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.comment-content {
+    color: #555;
+    line-height: 1.6;
+}
+
+.no-comments {
+    padding: 60px 40px;
+    text-align: center;
+    color: #666;
+    font-style: italic;
+}
+
+.comment-form {
+    padding: 40px;
+    background: var(--light-color);
+    border-top: 1px solid var(--border-color);
+}
+
+textarea.form-control {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.admin-actions {
+    border-top: 1px solid var(--border-color);
+    margin-top: 20px;
+    padding-top: 20px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .article-header,
+    .article-content,
+    .comment-form,
+    .comment {
+        padding: 25px 20px;
+    }
+
+    .actions {
+        padding: 20px 15px;
+    }
+
+    .article-title {
+        font-size: 2em;
+    }
+
+    .article-meta {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        font-size: 0.9em;
+    }
+}
+{{ end }}
+{{ define "posts_content" }}
+<div class="container">
+    <br/>
+    <article class="article-card fade-in">
+        <header class="article-header">
+            <h1 class="article-title">{{ .post.Title }}</h1>
+            <div class="article-meta">
+                <div class="meta-item">
+                    <span>📝</span>
+                    <span>Par <strong>{{ .post.Author }}</strong></span>
+                </div>
+                <div class="meta-item">
+                    <span>📅</span>
+                    <span>{{ .post.CreatedAt.Format "02/01/2006 à 15:04" }}</span>
+                </div>
+            </div>
+            {{- if .post.TagsList }}
+            <div class="article-tags">
+                {{- range .post.TagsList }}
+                <span class="tag">{{ . }}</span>
+                {{- end }}
+            </div>
+            {{- end }}
+        </header>
+
+        <div class="article-content">
+            {{ .post.ContentHTML }}
+        </div>
+
+        <!-- Actions avec Alpine.js -->
+        <div x-data="postInteractions({{ .post.ID }})">
+            <div class="actions">
+                <button @click="toggleLike" 
+                        :class="{ 'liked': isLiked }"
+                        class="btn btn-primary btn-like">
+                    <span x-show="!isLiked">🤍</span>
+                    <span x-show="isLiked">❤️</span>
+                    <span x-text="likeCount + ' likes'"></span>
+                </button>
+                
+                <button @click="showComments = !showComments" 
+                        class="btn btn-outline">
+                    <span>💬</span>
+                    <span x-text="comments.length + ' commentaires'"></span>
+                </button>
+            </div>
+
+            <!-- Actions administrateur -->
+            {{- if .isAuthenticated }}
+            <div class="admin-actions">
+                <h4 style="margin-bottom: 15px; color: var(--dark-color);">🔐 Actions Administrateur</h4>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <a href="/admin/posts/{{ .post.ID }}/edit" class="btn btn-warning">
+                        ✏️ Éditer cet article
+                    </a>
+                    <a href="/admin/posts" class="btn btn-primary">
+                        📝 Gérer tous les articles
+                    </a>
+                </div>
+            </div>
+            {{- end }}
+
+            <!-- Section commentaires -->
+            <div x-show="showComments" 
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform scale-95"
+                 x-transition:enter-end="opacity-100 transform scale-100"
+                 class="comments-section fade-in">
+                
+                <div class="comments-header">
+                    <span x-text="'💬 Commentaires (' + comments.length + ')'"></span>
+                </div>
+
+                <div class="comments-list">
+                    <template x-for="comment in comments" :key="comment.id">
+                        <div class="comment">
+                            <div class="comment-header">
+                                <span class="comment-author" x-text="comment.author"></span>
+                                <span class="comment-date" x-text="formatDate(comment.created_at)"></span>
+                            </div>
+                            <div class="comment-content" x-text="comment.content"></div>
+                        </div>
+                    </template>
+
+                    <div x-show="comments.length === 0" class="no-comments">
+                        <p>✨ Aucun commentaire pour le moment.</p>
+                        <p>Soyez le premier à partager votre avis !</p>
+                    </div>
+                </div>
+
+                <!-- Formulaire d'ajout -->
+                <form @submit.prevent="addComment" 
+                      class="comment-form"
+                      :class="{ 'loading': loading }">
+                    <h4 style="margin-bottom: 25px; color: var(--dark-color);">💭 Ajouter un commentaire</h4>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="author">Votre nom</label>
+                        <input x-model="newComment.author" 
+                               id="author"
+                               type="text" 
+                               class="form-control"
+                               placeholder="Entrez votre nom"
+                               required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="content">Votre commentaire</label>
+                        <textarea x-model="newComment.content"
+                                  id="content"
+                                  class="form-control"
+                                  placeholder="Partagez vos pensées..."
+                                  required></textarea>
+                    </div>
+
+                    <button type="submit" 
+                            :disabled="loading || !newComment.author.trim() || !newComment.content.trim()"
+                            class="btn btn-primary">
+                        <span x-show="!loading">🚀 Publier le commentaire</span>
+                        <span x-show="loading">⏳ Publication en cours...</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </article>
+</div>
+{{ end }}
+{{ define "posts_scripts" }}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('postInteractions', (postId) => ({
+        postId: postId,
+        comments: [],
+        showComments: false,
+        likeCount: 0,
+        isLiked: false,
+        loading: false,
+        newComment: {
+            author: '',
+            content: ''
+        },
+
+        async init() {
+            await this.loadComments();
+            await this.loadLikeStatus();
+        },
+
+        async loadComments() {
+            try {
+                const response = await fetch(`/api/posts/${this.postId}/comments`);
+                if (response.ok) {
+                    this.comments = await response.json();
+                }
+            } catch (error) {
+                console.error('Erreur chargement commentaires:', error);
+                window.showNotification('Erreur lors du chargement des commentaires', 'error');
+            }
+        },
+
+        async loadLikeStatus() {
+            try {
+                const response = await fetch(`/api/posts/${this.postId}/like-status`);
+                if (response.ok) {
+                    const data = await response.json();
+                    this.isLiked = data.liked;
+                    this.likeCount = data.like_count;
+                }
+            } catch (error) {
+                console.error('Erreur chargement likes:', error);
+            }
+        },
+
+        async addComment() {
+            if (!this.newComment.author.trim() || !this.newComment.content.trim()) {
+                window.showNotification('Veuillez remplir tous les champs', 'error');
+                return;
+            }
+
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/posts/${this.postId}/comments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.newComment)
+                });
+
+                if (response.ok) {
+                    const comment = await response.json();
+                    this.comments.push(comment);
+                    this.newComment = { author: '', content: '' };
+                    window.showNotification('Commentaire ajouté avec succès !', 'success');
+                } else {
+                    const error = await response.json();
+                    window.showNotification('Erreur: ' + error.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erreur ajout commentaire:', error);
+                window.showNotification('Erreur lors de l\'ajout du commentaire', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async toggleLike() {
+            try {
+                const response = await fetch(`/api/posts/${this.postId}/like`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    this.isLiked = data.liked;
+                    this.likeCount = data.like_count;
+                }
+            } catch (error) {
+                console.error('Erreur like:', error);
+                window.showNotification('Erreur lors du like', 'error');
+            }
+        },
+
+        formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('fr-FR', { 
+                day: '2-digit', 
+                month: 'long', 
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+    }));
+});
+</script>
+{{ end }}

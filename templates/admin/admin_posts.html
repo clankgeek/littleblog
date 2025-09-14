@@ -1,0 +1,477 @@
+{{ define "admin_posts" }}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    {{ template "head" . }}
+    <style>
+        {{ template "admin_header_styles" . }}
+        {{ template "common_styles" . }}
+        {{ template "admin_posts_styles" . }}
+        {{ template "common_footer_styles" . }}
+    </style>
+</head>
+<body>
+    {{ template "admin_header" . }}
+    <main class="main">
+        {{ template "admin_posts_content" . }}
+    </main>
+    {{ template "footer" . }}
+    {{ template "admin_posts_scripts" . }}
+    {{ template "common_scripts" . }}
+</body>
+</html>
+{{ end }}
+
+{{ define "admin_posts_styles" }}
+/* Styles spécifiques à la liste des articles */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding: 30px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.page-title {
+    font-size: 2.2em;
+    font-weight: 700;
+    color: var(--dark-color);
+}
+
+.posts-container {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.posts-header {
+    background: var(--light-color);
+    padding: 20px 30px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.posts-count {
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: 20px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.table th {
+    background: var(--light-color);
+    font-weight: 600;
+    color: var(--dark-color);
+    font-size: 0.95em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.table tr {
+    transition: var(--transition);
+}
+
+.table tr:hover {
+    background: #fafafa;
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.post-title {
+    font-weight: 600;
+    color: var(--dark-color);
+    margin-bottom: 8px;
+    font-size: 1.1em;
+}
+
+.post-excerpt {
+    color: #666;
+    font-size: 0.9em;
+    max-width: 350px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.post-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.tag {
+    background: var(--primary-color);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 500;
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.stats-cell {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.stats-cell .stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: #666;
+}
+
+.empty-icon {
+    font-size: 5em;
+    margin-bottom: 25px;
+    opacity: 0.3;
+}
+
+.empty-title {
+    font-size: 1.5em;
+    margin-bottom: 15px;
+    color: var(--dark-color);
+}
+
+.empty-description {
+    font-size: 1.1em;
+    margin-bottom: 30px;
+}
+
+/* Modal de confirmation */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+}
+
+.modal {
+    background: white;
+    border-radius: var(--border-radius);
+    padding: 40px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+}
+
+.modal-icon {
+    text-align: center;
+    font-size: 3em;
+    margin-bottom: 20px;
+}
+
+.modal-title {
+    font-size: 1.4em;
+    font-weight: 600;
+    margin-bottom: 15px;
+    color: var(--dark-color);
+    text-align: center;
+}
+
+.modal-content {
+    margin-bottom: 25px;
+    color: #666;
+    text-align: center;
+    line-height: 1.6;
+}
+
+.modal-target {
+    background: var(--light-color);
+    padding: 15px;
+    border-radius: var(--border-radius);
+    margin: 15px 0;
+    font-weight: 600;
+    color: var(--dark-color);
+    text-align: center;
+}
+
+.modal-warning {
+    background: #fff3cd;
+    color: #856404;
+    padding: 15px;
+    border-radius: var(--border-radius);
+    margin: 15px 0;
+    text-align: center;
+    font-weight: 500;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .post-excerpt {
+        max-width: 250px;
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+        gap: 20px;
+        align-items: flex-start;
+    }
+
+    .table th,
+    .table td {
+        padding: 15px 10px;
+        font-size: 0.9em;
+    }
+
+    .post-excerpt {
+        max-width: 200px;
+    }
+
+    .actions {
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 0.8em;
+    }
+}
+
+@media (max-width: 480px) {
+    .table-container {
+        font-size: 0.85em;
+    }
+
+    .post-title {
+        font-size: 1em;
+    }
+
+    .modal {
+        padding: 25px;
+        margin: 15px;
+    }
+
+    .modal-actions {
+        flex-direction: column;
+    }
+}
+{{ end }}
+
+{{ define "admin_posts_content" }}
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">📚 Gestion des Articles</h1>
+        <a href="/admin/posts/new" class="btn btn-success">
+            ➕ Nouvel Article
+        </a>
+    </div>
+
+    <div x-data="postsManager">
+        {{- if .posts }}
+        <div class="posts-container">
+            <div class="posts-header">
+                <div class="posts-count">
+                    📊 <strong>{{ len .posts }}</strong> article{{ if gt (len .posts) 1 }}s{{ end }} total{{ if gt (len .posts) 1 }}aux{{ end }}
+                </div>
+                <div style="font-size: 0.9em; color: #666;">
+                    Dernière mise à jour il y a quelques instants
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">📝 Article</th>
+                            <th style="width: 15%;">👤 Auteur</th>
+                            <th style="width: 15%;">📅 Date</th>
+                            <th style="width: 15%;">🏷️ Tags</th>
+                            <th style="width: 10%;">📊 Stats</th>
+                            <th style="width: 25%;">⚙️ Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{- range .posts }}
+                        <tr>
+                            <td>
+                                <div class="post-title">{{ .Title }}</div>
+                                <div class="post-excerpt">{{ .Excerpt }}</div>
+                            </td>
+                            <td>
+                                <strong>{{ .Author }}</strong>
+                            </td>
+                            <td>
+                                <div>{{ .CreatedAt.Format "02/01/2006" }}</div>
+                                <div style="font-size: 0.8em; color: #666;">{{ .CreatedAt.Format "15:04" }}</div>
+                            </td>
+                            <td>
+                                <div class="post-tags">
+                                    {{- range .TagsList }}
+                                    <span class="tag">{{ . }}</span>
+                                    {{- end }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="stats-cell">
+                                    <div class="stat">❤️ {{ .LikeCount }}</div>
+                                    <div class="stat">💬 {{ len .Comments }}</div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="actions">
+                                    <a href="/post/{{ .ID }}" class="btn btn-primary btn-sm" target="_blank" title="Voir l'article">
+                                        👁️
+                                    </a>
+                                    <a href="/admin/posts/{{ .ID }}/edit" class="btn btn-warning btn-sm" title="Éditer">
+                                        ✏️
+                                    </a>
+                                    <button @click="confirmDelete({{ .ID }}, '{{ .Title }}')" 
+                                            class="btn btn-danger btn-sm" title="Supprimer">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {{- end }}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {{- else }}
+        <div class="posts-container">
+            <div class="empty-state">
+                <div class="empty-icon">📝</div>
+                <h3 class="empty-title">Aucun article pour le moment</h3>
+                <p class="empty-description">Commencez par créer votre premier article pour partager vos idées !</p>
+                <a href="/admin/posts/new" class="btn btn-success btn-lg">
+                    ➕ Créer le premier article
+                </a>
+            </div>
+        </div>
+        {{- end }}
+
+        <!-- Modal de confirmation -->
+        <div x-show="showDeleteModal" 
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             class="modal-overlay" 
+             @click.self="showDeleteModal = false">
+            <div class="modal"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform scale-95"
+                 x-transition:enter-end="opacity-100 transform scale-100">
+                <div class="modal-icon">🗑️</div>
+                <h3 class="modal-title">Confirmer la suppression</h3>
+                <div class="modal-content">
+                    <p>Êtes-vous absolument sûr de vouloir supprimer cet article ?</p>
+                    <div class="modal-target" x-text="deleteTarget.title"></div>
+                    <div class="modal-warning">
+                        ⚠️ Cette action est <strong>irréversible</strong> !<br>
+                        Tous les commentaires et likes seront également supprimés.
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button @click="showDeleteModal = false" class="btn btn-primary">
+                        ❌ Annuler
+                    </button>
+                    <button @click="deletePost" 
+                            :disabled="deleting" 
+                            class="btn btn-danger">
+                        <span x-show="!deleting">🗑️ Supprimer définitivement</span>
+                        <span x-show="deleting">⏳ Suppression...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ end }}
+
+{{ define "admin_posts_scripts" }}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('postsManager', () => ({
+        showDeleteModal: false,
+        deleteTarget: { id: null, title: '' },
+        deleting: false,
+
+        confirmDelete(id, title) {
+            this.deleteTarget = { id, title };
+            this.showDeleteModal = true;
+        },
+
+        async deletePost() {
+            this.deleting = true;
+
+            try {
+                const response = await fetch(`/admin/posts/${this.deleteTarget.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    this.showDeleteModal = false;
+                    window.showNotification('Article supprimé avec succès', 'success');
+                    
+                    // Recharger la page après un court délai
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    window.showNotification('Erreur: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erreur suppression:', error);
+                window.showNotification('Erreur lors de la suppression', 'error');
+            } finally {
+                this.deleting = false;
+            }
+        }
+    }));
+});
+</script>
+{{ end }}

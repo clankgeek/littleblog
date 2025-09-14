@@ -1,0 +1,686 @@
+{{ define "index" }}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    {{ template "head" . }}
+    <style>
+        {{ template "common_styles" . }}
+        {{ template "common_footer_styles" . }}
+        {{ template "public_header_styles" . }}
+        {{ template "index_styles" . }}
+    </style>
+</head>
+<body>
+    {{ template "public_header" . }}
+    <main class="main">
+        {{ template "index_content" . }}
+    </main>
+    {{ template "footer" . }}
+    {{ template "index_scripts" . }}
+    {{ template "common_scripts" . }}
+</body>
+</html>
+{{ end }}
+
+{{ define "index_styles" }}
+/* Styles spécifiques à l'index */
+.hero {
+    background: var(--gradient);
+    color: white;
+    padding: 80px 0;
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+.hero-title {
+    font-size: 3.5em;
+    font-weight: 800;
+    margin-bottom: 20px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.hero-subtitle {
+    font-size: 1.3em;
+    opacity: 0.9;
+    margin-bottom: 40px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 30px;
+    margin-bottom: 50px;
+}
+
+.stat-card {
+    background: white;
+    padding: 30px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    text-align: center;
+    transition: var(--transition);
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-hover);
+}
+
+.stat-icon {
+    font-size: 2.5em;
+    margin-bottom: 15px;
+}
+
+.stat-number {
+    font-size: 2em;
+    font-weight: bold;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.stat-label {
+    color: #666;
+    font-weight: 500;
+}
+
+.articles-section {
+    margin-bottom: 60px;
+}
+
+.section-title {
+    font-size: 2.5em;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 50px;
+    color: var(--dark-color);
+}
+
+/* Modification principale : affichage en colonne unique */
+.articles-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.article-card {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition: var(--transition);
+    width: 100%;
+    opacity: 0;
+    animation: fadeInUp 0.6s ease forwards;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.article-card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-hover);
+}
+
+.article-header {
+    padding: 30px;
+    background: var(--gradient);
+    color: white;
+    position: relative;
+}
+
+.article-title {
+    font-size: 1.6em;
+    font-weight: 700;
+    margin-bottom: 15px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.article-title a {
+    color: white;
+    text-decoration: none;
+    transition: opacity 0.3s;
+}
+
+.article-title a:hover {
+    opacity: 0.8;
+}
+
+.article-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9em;
+    opacity: 0.9;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.article-content {
+    padding: 30px;
+}
+
+.article-excerpt {
+    color: #555;
+    line-height: 1.8;
+    margin-bottom: 20px;
+    font-size: 1.05em;
+}
+
+.article-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.tag {
+    background: var(--light-color);
+    color: var(--dark-color);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    border: 1px solid var(--border-color);
+    transition: var(--transition);
+}
+
+.tag:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.article-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.read-more {
+    background: var(--primary-color);
+    color: white;
+    padding: 10px 20px;
+    border-radius: var(--border-radius);
+    text-decoration: none;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.read-more:hover {
+    background: var(--primary-hover);
+    transform: translateX(2px);
+}
+
+.article-stats {
+    display: flex;
+    gap: 15px;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.stat {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.admin-actions {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-admin {
+    background: var(--warning-color);
+    color: var(--dark-color);
+    padding: 6px 12px;
+    border-radius: var(--border-radius);
+    text-decoration: none;
+    font-size: 0.85em;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.btn-admin:hover {
+    background: #e0a800;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: #666;
+}
+
+.empty-icon {
+    font-size: 4em;
+    margin-bottom: 20px;
+}
+
+/* Loader pour infinite scroll */
+.loader {
+    text-align: center;
+    padding: 40px;
+}
+
+.loader-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--light-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.no-more-posts {
+    text-align: center;
+    padding: 30px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Skeleton loader pour les articles */
+.article-skeleton {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.skeleton-header {
+    padding: 30px;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.skeleton-title {
+    height: 28px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.skeleton-meta {
+    display: flex;
+    gap: 20px;
+}
+
+.skeleton-meta-item {
+    height: 20px;
+    width: 100px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 4px;
+}
+
+.skeleton-content {
+    padding: 30px;
+}
+
+.skeleton-text {
+    height: 16px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.skeleton-text:last-child {
+    width: 70%;
+}
+
+@media (max-width: 768px) {
+    .hero {
+        padding: 60px 0;
+    }
+
+    .hero-title {
+        font-size: 2.5em;
+    }
+
+    .hero-subtitle {
+        font-size: 1.1em;
+    }
+
+    .articles-grid {
+        gap: 20px;
+    }
+
+    .article-header,
+    .article-content {
+        padding: 20px;
+    }
+
+    .section-title {
+        font-size: 2em;
+    }
+
+    .stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .stat-card {
+        padding: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats {
+        grid-template-columns: 1fr;
+    }
+
+    .article-meta {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .article-actions {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+    }
+
+    .read-more {
+        text-align: center;
+    }
+}
+{{ end }}
+
+{{ define "index_content" }}
+<!-- Main Content -->
+<div class="container">
+    <!-- Articles Section avec Alpine.js pour infinite scroll -->
+    <section class="articles-section" 
+             x-data="infiniteScroll()"
+             x-init="init()">
+        <br/>
+        
+        <!-- Conteneur des articles -->
+        <div class="articles-grid" id="articles-container">
+            <!-- Les articles seront chargés dynamiquement ici -->
+        </div>
+
+        <!-- Loader pendant le chargement -->
+        <div class="loader" x-show="loading" x-cloak>
+            <div class="loader-spinner"></div>
+            <p>Chargement des articles...</p>
+        </div>
+
+        <!-- Message quand il n'y a plus d'articles -->
+        <div class="no-more-posts" x-show="!hasMore && !loading && posts.length > 0" x-cloak>
+            <p>🎉 Vous avez tout lu !</p>
+        </div>
+
+        <!-- État vide -->
+        <div class="empty-state" x-show="posts.length === 0 && !loading" x-cloak>
+            <div class="empty-icon">📝</div>
+            <h3>Aucun article pour le moment</h3>
+            <p>Restez connectés, du contenu arrive bientôt !</p>
+        </div>
+
+        <!-- Sentinel pour déclencher le chargement -->
+        <div id="scroll-sentinel" x-ref="sentinel"></div>
+    </section>
+</div>
+
+<!-- Template pour un article (caché, utilisé par JS) -->
+<template id="article-template">
+    <article class="article-card">
+        <header class="article-header">
+            <h3 class="article-title">
+                <a href="" data-href></a>
+            </h3>
+            <div class="article-meta">
+                <div class="meta-item">
+                    <span>👤</span>
+                    <span data-author></span>
+                </div>
+                <div class="meta-item">
+                    <span>📅</span>
+                    <span data-date></span>
+                </div>
+            </div>
+        </header>
+
+        <div class="article-content">
+            <p class="article-excerpt" data-excerpt></p>
+            
+            <div class="article-tags" data-tags></div>
+
+            <div class="article-actions">
+                <a href="" class="read-more" data-readmore>
+                    Lire la suite →
+                </a>
+                <div class="article-stats">
+                    <div class="stat">
+                        <span>❤️</span>
+                        <span data-likes>0</span>
+                    </div>
+                    <div class="stat">
+                        <span>💬</span>
+                        <span data-comments>0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-actions" data-admin style="display: none;">
+                <a href="" class="btn-admin" data-edit>✏️ Éditer</a>
+            </div>
+        </div>
+    </article>
+</template>
+
+<!-- Template pour le skeleton loader -->
+<template id="skeleton-template">
+    <div class="article-skeleton">
+        <div class="skeleton-header">
+            <div class="skeleton-title"></div>
+            <div class="skeleton-meta">
+                <div class="skeleton-meta-item"></div>
+                <div class="skeleton-meta-item"></div>
+            </div>
+        </div>
+        <div class="skeleton-content">
+            <div class="skeleton-text"></div>
+            <div class="skeleton-text"></div>
+            <div class="skeleton-text"></div>
+        </div>
+    </div>
+</template>
+{{ end }}
+
+{{ define "index_scripts" }}
+<script>
+// Configuration Alpine.js pour l'infinite scroll
+function infiniteScroll() {
+    return {
+        posts: [],
+        loading: false,
+        hasMore: true,
+        page: 1,
+        perPage: 5,
+        observer: null,
+        isAuthenticated: {{ if .isAuthenticated }}true{{ else }}false{{ end }},
+        
+        async init() {
+            // Charger les premiers articles
+            await this.loadPosts();
+            
+            // Configurer l'Intersection Observer
+            this.setupObserver();
+        },
+        
+        setupObserver() {
+            const options = {
+                root: null,
+                rootMargin: '100px',
+                threshold: 0.1
+            };
+            
+            this.observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && !this.loading && this.hasMore) {
+                        this.loadPosts();
+                    }
+                });
+            }, options);
+            
+            // Observer le sentinel
+            if (this.$refs.sentinel) {
+                this.observer.observe(this.$refs.sentinel);
+            }
+        },
+        
+        async loadPosts() {
+            if (this.loading || !this.hasMore) return;
+            
+            this.loading = true;
+            
+            // Afficher des skeletons pendant le chargement
+            this.showSkeletons();
+            
+            try {
+                // Appel API pour récupérer les articles
+                const response = await fetch(`/api/posts?page=${this.page}&limit=${this.perPage}`);
+                const data = await response.json();
+                
+                // Simuler un délai pour voir l'effet (à retirer en production)
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Retirer les skeletons
+                this.removeSkeletons();
+                
+                if (data.posts && data.posts.length > 0) {
+                    // Ajouter les nouveaux articles
+                    data.posts.forEach(post => {
+                        this.renderArticle(post);
+                        this.posts.push(post);
+                    });
+                    
+                    this.page++;
+                    this.hasMore = data.hasMore || (data.posts.length === this.perPage);
+                } else {
+                    this.hasMore = false;
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement des articles:', error);
+                this.removeSkeletons();
+                
+                // Fallback: utiliser les données côté serveur si disponibles
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        renderArticle(post) {
+            const template = document.getElementById('article-template');
+            const clone = template.content.cloneNode(true);
+            const article = clone.querySelector('.article-card');
+            
+            // Remplir les données
+            const titleLink = article.querySelector('[data-href]');
+            titleLink.href = `/post/${post.ID || post.id}`;
+            titleLink.textContent = post.title;
+            
+            article.querySelector('[data-author]').textContent = post.author || 'Anonyme';
+            article.querySelector('[data-date]').textContent = this.formatDate(post.created_at);
+            article.querySelector('[data-excerpt]').textContent = post.excerpt || '';
+            article.querySelector('[data-likes]').textContent = post.like_count || 0;
+            article.querySelector('[data-comments]').textContent = (post.comments || []).length;
+            
+            const readMore = article.querySelector('[data-readmore]');
+            readMore.href = `/post/${post.ID || post.id}`;
+            
+            // Tags
+            const tagsContainer = article.querySelector('[data-tags]');
+            const tags = post.TagsList || post.tagsList || [];
+            tags.forEach(tag => {
+                const tagEl = document.createElement('span');
+                tagEl.className = 'tag';
+                tagEl.textContent = tag;
+                tagsContainer.appendChild(tagEl);
+            });
+            
+            // Admin actions
+            if (this.isAuthenticated) {
+                const adminSection = article.querySelector('[data-admin]');
+                adminSection.style.display = 'block';
+                const editLink = article.querySelector('[data-edit]');
+                editLink.href = `/admin/posts/${post.ID || post.id}/edit`;
+            }
+            
+            // Ajouter au conteneur
+            document.getElementById('articles-container').appendChild(clone);
+        },
+        
+        showSkeletons() {
+            const template = document.getElementById('skeleton-template');
+            const container = document.getElementById('articles-container');
+            
+            for (let i = 0; i < 2; i++) {
+                const clone = template.content.cloneNode(true);
+                const skeleton = clone.querySelector('.article-skeleton');
+                skeleton.classList.add('skeleton-loader');
+                container.appendChild(clone);
+            }
+        },
+        
+        removeSkeletons() {
+            const skeletons = document.querySelectorAll('.skeleton-loader');
+            skeletons.forEach(skeleton => skeleton.remove());
+        },
+        
+        formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+        }
+    };
+}
+
+// Style pour x-cloak
+document.head.insertAdjacentHTML('beforeend', '<style>[x-cloak] { display: none !important; }</style>');
+</script>
+{{ end }}

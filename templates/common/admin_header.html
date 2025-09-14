@@ -1,0 +1,29 @@
+{{ define "admin_header" }}
+<div class="admin-header">
+    <div class="container">
+        <nav class="admin-nav">
+            <h1 class="admin-title">{{ if .pageIcon }}{{ .pageIcon }} {{ end }}{{ if .pageTitle }}{{ .pageTitle }}{{ else }}🔐 Administration{{ end }}</h1>
+            <div class="admin-user">
+                <div class="nav-links">
+                    <a href="/admin" class="nav-link {{ if eq .currentPage "dashboard" }}active{{ end }}">
+                        🏠 Dashboard
+                    </a>
+                    <a href="/admin/posts" class="nav-link {{ if eq .currentPage "posts" }}active{{ end }}">
+                        📝 Articles
+                    </a>
+                    <a href="/admin/posts/new" class="nav-link {{ if eq .currentPage "new_post" }}active{{ end }}">
+                        ➕ Nouveau
+                    </a>
+                    <a href="/" class="nav-link" target="_blank">
+                        👁️ Voir le site
+                    </a>
+                </div>
+                <div class="admin-user-info">
+                    <span class="username">👤 {{ if .username }}{{ .username }}{{ else }}Admin{{ end }}</span>
+                    <button onclick="logout()" class="btn btn-danger btn-sm">🚪 Déconnexion</button>
+                </div>
+            </div>
+        </nav>
+    </div>
+</div>
+{{ end }}

@@ -1,0 +1,15 @@
+{{ define "head" }}
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📔</text></svg>">
+<link rel="alternate" type="application/rss+xml" title="{{.siteName}} - RSS" href="/feed/rss" /><br/>
+<link rel="alternate" type="application/atom+xml" title="{{.siteName}} - Atom" href="/feed/atom" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ .title }}{{ if .siteName }} | {{ .siteName }}{{ end }}</title>
+<meta name="description" content="{{ .description }}">
+{{ if .ogTitle }}
+<meta property="og:title" content="{{ .ogTitle }}">
+<meta property="og:description" content="{{ .description }}">
+<meta property="og:type" content="{{ if .ogType }}{{ .ogType }}{{ else }}website{{ end }}">
+{{ end }}
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.x/dist/cdn.min.js"></script>
+{{ end }}
