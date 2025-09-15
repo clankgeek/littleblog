@@ -971,7 +971,7 @@ func postHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "posts", gin.H{
 		"title":           post.Title,
 		"siteName":        configuration.SiteName,
-		"description":     post.Excerpt,
+		"description":     configuration.Description,
 		"post":            post,
 		"isAuthenticated": isAdmin,
 		"showSearch":      false,
