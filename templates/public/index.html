@@ -136,8 +136,8 @@
 
 .article-header {
     padding: 30px;
-    background: var(--gradient);
-    color: white;
+    background: white;
+    color: var(--gradient);
     position: relative;
 }
 
@@ -149,7 +149,7 @@
 }
 
 .article-title a {
-    color: white;
+    color: var(--gradient);
     text-decoration: none;
     transition: opacity 0.3s;
 }
@@ -217,8 +217,8 @@
 }
 
 .read-more {
-    background: var(--primary-color);
-    color: white;
+    background: white;
+    color: var(--primary-color);
     padding: 10px 20px;
     border-radius: var(--border-radius);
     text-decoration: none;
@@ -227,6 +227,7 @@
 }
 
 .read-more:hover {
+    color: white;
     background: var(--primary-hover);
     transform: translateX(2px);
 }
@@ -579,9 +580,6 @@ function infiniteScroll() {
                 const response = await fetch(`/api/posts?page=${this.page}&limit=${this.perPage}`);
                 const data = await response.json();
                 
-                // Simuler un délai pour voir l'effet (à retirer en production)
-                await new Promise(resolve => setTimeout(resolve, 500));
-                
                 // Retirer les skeletons
                 this.removeSkeletons();
                 
@@ -600,8 +598,6 @@ function infiniteScroll() {
             } catch (error) {
                 console.error('Erreur lors du chargement des articles:', error);
                 this.removeSkeletons();
-                
-                // Fallback: utiliser les données côté serveur si disponibles
             } finally {
                 this.loading = false;
             }
