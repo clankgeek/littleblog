@@ -529,7 +529,7 @@ document.addEventListener('alpine:init', () => {
             content: {{ if .isEdit }}`{{ .post.Content }}`{{ else }}''{{ end }},
             excerpt: {{ if .isEdit }}'{{ .post.Excerpt }}'{{ else }}''{{ end }},
             author: {{ if .isEdit }}'{{ .post.Author }}'{{ else }}''{{ end }},
-            tags: {{ if .isEdit }}{{ .post.TagsList | printf "%#v" }}{{ else }}[]{{ end }}
+            tags: {{ if .isEdit }}{{ .post.TagsList | jsonify }}{{ else }}[]{{ end }}
         },
         uploading: false,
         uploadProgress: 0,

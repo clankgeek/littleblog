@@ -364,10 +364,7 @@
                                     <a href="/admin/posts/{{ .ID }}/edit" class="btn btn-warning btn-sm" title="Éditer">
                                         ✏️
                                     </a>
-                                    <button @click="confirmDelete({{ .ID }}, '{{ .Title }}')" 
-                                            class="btn btn-danger btn-sm" title="Supprimer">
-                                        🗑️
-                                    </button>
+                                    <button @click="confirmDelete({{ .ID }}, '{{ .Title | escapeJS}}')" class="btn btn-danger btn-sm" title="Supprimer">🗑️</button>
                                 </div>
                             </td>
                         </tr>

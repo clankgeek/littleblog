@@ -239,16 +239,16 @@ func TestGetPostsAPI(t *testing.T) {
 
 	r.GET("/api/posts", getPostsAPI)
 
-	req := httptest.NewRequest("GET", "/api/posts", nil)
+	req := httptest.NewRequest("GET", "/api/posts?page=0&limit=5", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var posts []Post
-	err := json.Unmarshal(w.Body.Bytes(), &posts)
+	var response map[string]any
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Len(t, posts, 2)
+	assert.Len(t, response["posts"], 2)
 }
 
 func TestGetPostAPI(t *testing.T) {

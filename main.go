@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -746,12 +747,33 @@ func safeCSS(css string) template.CSS {
 	return template.CSS(css)
 }
 
-func jsonify(v interface{}) string {
+func escapeJS(s string) template.JS {
+	// Échappe les caractères problématiques pour JavaScript
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `\'`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	return template.JS(s)
+}
+
+func jsonify(v any) template.JS {
+	if v == nil {
+		return template.JS("[]")
+	}
+
+	// Vérifier si c'est un slice vide
+	if reflect.ValueOf(v).Kind() == reflect.Slice && reflect.ValueOf(v).Len() == 0 {
+		return template.JS("[]")
+	}
+
 	b, err := json.Marshal(v)
 	if err != nil {
-		return "[]"
+		return template.JS("[]")
 	}
-	return string(b)
+
+	return template.JS(b)
 }
 
 func parseCommandLineArgs() (configFile string, shouldCreateExample bool, versionDisplay bool, err error) {
@@ -815,8 +837,9 @@ func main() {
 
 	// ZgotmplZ
 	r.SetFuncMap(template.FuncMap{
-		"safeCSS": safeCSS,
-		"jsonify": jsonify,
+		"safeCSS":  safeCSS,
+		"escapeJS": escapeJS,
+		"jsonify":  jsonify,
 	})
 
 	// use Compression, with gzip, zstd, brotli
