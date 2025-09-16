@@ -1,11 +1,19 @@
+{{ define "admin_login" }}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion Admin - {{ .siteName }}</title>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    {{ template "head" . }}
     <style>
+        {{ template "admin_login_styles" . }}
+    </style>
+</head>
+<body>
+    {{ template "admin_login_content" . }}
+    {{ template "admin_login_scripts" . }}
+</body>
+</html>
+{{ end }}
+{{ define "admin_login_styles" }}
         {{.theme | safeCSS}}
 
         * {
@@ -238,9 +246,8 @@
                 font-size: 1em;
             }
         }
-    </style>
-</head>
-<body>
+{{ end }}
+{{ define "admin_login_content" }}
     <div class="bg-shapes">
         <div class="shape"></div>
         <div class="shape"></div>
@@ -289,7 +296,8 @@
         </form>
         <a href="/" class="back-link">← Retour au blog</a>
     </div>
-
+{{ end }}
+{{ define "admin_login_scripts" }}
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('loginForm', () => ({
@@ -330,5 +338,4 @@
             }));
         });
     </script>
-</body>
-</html>
+{{ end }}

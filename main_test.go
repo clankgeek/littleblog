@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andskur/argon2-hashing"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,11 @@ import (
 )
 
 // ============= Setup et Teardown =============
+
+func HashPassword(pass string) (string, error) {
+	hash, err := argon2.GenerateFromPassword([]byte(pass), argon2.DefaultParams)
+	return string(hash), err
+}
 
 func setupTestDB(t *testing.T) *gorm.DB {
 	testDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
@@ -116,63 +122,6 @@ func TestPost_AfterFind(t *testing.T) {
 
 	assert.Equal(t, []string{"tag1", "tag2", "tag3"}, foundPost.TagsList)
 	assert.Contains(t, string(foundPost.ContentHTML), "<strong>Bold Text</strong>")
-}
-
-// ============= Tests pour l'authentification =============
-
-func TestHashPassword(t *testing.T) {
-	tests := []struct {
-		name     string
-		password string
-		wantErr  bool
-	}{
-		{"Valid password", "validpass123", false},
-		{"Short password", "short", true},
-		{"Long password", "verylongpasswordthatismorethan50characters1234567890", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			hash, err := HashPassword(tt.password)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.NotEmpty(t, hash)
-				assert.True(t, strings.HasPrefix(hash, "$argon2id$"))
-			}
-		})
-	}
-}
-
-func TestVerifyPassword(t *testing.T) {
-	password := "testpassword123"
-	hash, err := HashPassword(password)
-	require.NoError(t, err)
-
-	tests := []struct {
-		name     string
-		password string
-		hash     string
-		want     bool
-		wantErr  bool
-	}{
-		{"Correct password", password, hash, true, false},
-		{"Wrong password", "wrongpassword", hash, false, false},
-		{"Invalid hash format", password, "invalid$hash", false, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := VerifyPassword(tt.password, tt.hash)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
-			}
-		})
-	}
 }
 
 // ============= Tests pour la configuration =============
@@ -813,25 +762,6 @@ func TestPostWorkflow(t *testing.T) {
 	var count int64
 	testDB.Model(&Post{}).Where("id = ?", postID).Count(&count)
 	assert.Equal(t, int64(0), count)
-}
-
-// ============= Benchmarks =============
-
-func BenchmarkHashPassword(b *testing.B) {
-	password := "benchmarkpassword123"
-	for i := 0; i < b.N; i++ {
-		HashPassword(password)
-	}
-}
-
-func BenchmarkVerifyPassword(b *testing.B) {
-	password := "benchmarkpassword123"
-	hash, _ := HashPassword(password)
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		VerifyPassword(password, hash)
-	}
 }
 
 func BenchmarkConvertMarkdownToHTML(b *testing.B) {

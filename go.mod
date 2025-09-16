@@ -4,12 +4,12 @@ go 1.24.6
 
 require (
 	github.com/CAFxX/httpcompression/contrib/gin-gonic/gin v0.0.0-20241101105416-f754b5f26260
+	github.com/andskur/argon2-hashing v0.1.3
 	github.com/gin-contrib/sessions v1.0.4
 	github.com/gin-gonic/gin v1.10.1
 	github.com/stretchr/testify v1.11.1
 	github.com/ulule/limiter/v3 v3.11.2
 	github.com/yuin/goldmark v1.7.13
-	golang.org/x/crypto v0.42.0
 	golang.org/x/image v0.31.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/sqlite v1.6.0
@@ -50,6 +50,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
 	golang.org/x/arch v0.21.0 // indirect
+	golang.org/x/crypto v0.42.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.29.0 // indirect

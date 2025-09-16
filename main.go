@@ -3,8 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/subtle"
-	"encoding/base64"
+	"embed"
 	"encoding/json"
 	"encoding/xml"
 	"flag"
@@ -29,6 +28,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	gincompress "github.com/CAFxX/httpcompression/contrib/gin-gonic/gin"
+	"github.com/andskur/argon2-hashing"
 	"github.com/ulule/limiter/v3"
 	ginlimiter "github.com/ulule/limiter/v3/drivers/middleware/gin"
 	"github.com/ulule/limiter/v3/drivers/store/memory"
@@ -36,7 +36,6 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
-	"golang.org/x/crypto/argon2"
 	"golang.org/x/image/draw"
 	"gopkg.in/yaml.v3"
 	"gorm.io/driver/sqlite"
@@ -53,6 +52,9 @@ var (
 	configuration *Config
 	theme         string
 )
+
+//go:embed templates/**/*.html
+var templatesFS embed.FS
 
 // Models avec tags GORM
 type Post struct {
@@ -122,14 +124,6 @@ type Config struct {
 	Admin_pass  string `yaml:"admin_pass"`
 	Admin_hash  string `yaml:"admin_pass_hash"`
 	Production  bool   `yaml:"production"`
-}
-
-type argon2params struct {
-	memory      uint32
-	iterations  uint32
-	parallelism uint8
-	saltLength  uint32
-	keyLength   uint32
 }
 
 // RSS représente le flux RSS complet
@@ -208,85 +202,6 @@ type Color struct {
 	R, G, B int
 }
 
-// HashPassword génère un hash Argon2id d'un mot de passe
-func HashPassword(password string) (string, error) {
-	defaultParams := &argon2params{
-		memory:      64 * 1024, // 64 MB
-		iterations:  3,
-		parallelism: 2,
-		saltLength:  16,
-		keyLength:   32,
-	}
-
-	if len(password) < 8 {
-		return "", fmt.Errorf("le mot de passe doit contenir au moins 8 caractères")
-	}
-
-	// Générer un salt aléatoire
-	salt := make([]byte, defaultParams.saltLength)
-	_, err := rand.Read(salt)
-	if err != nil {
-		return "", err
-	}
-
-	// Générer le hash
-	hash := argon2.IDKey([]byte(password), salt, defaultParams.iterations,
-		defaultParams.memory, defaultParams.parallelism, defaultParams.keyLength)
-
-	// Encoder en base64
-	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
-	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
-
-	// Format : $argon2id$v=19$m=65536,t=3,p=2$salt$hash
-	encodedHash := fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
-		argon2.Version, defaultParams.memory, defaultParams.iterations,
-		defaultParams.parallelism, b64Salt, b64Hash)
-
-	return encodedHash, nil
-}
-
-func VerifyPassword(password, encodedHash string) (bool, error) {
-	// Extraire les paramètres et le hash
-	vals := strings.Split(encodedHash, "$")
-	if len(vals) != 6 {
-		return false, fmt.Errorf("format de hash invalide")
-	}
-
-	var version int
-	_, err := fmt.Sscanf(vals[2], "v=%d", &version)
-	if err != nil {
-		return false, err
-	}
-
-	p := &argon2params{}
-	_, err = fmt.Sscanf(vals[3], "m=%d,t=%d,p=%d", &p.memory, &p.iterations, &p.parallelism)
-	if err != nil {
-		return false, err
-	}
-
-	salt, err := base64.RawStdEncoding.DecodeString(vals[4])
-	if err != nil {
-		return false, err
-	}
-
-	hash, err := base64.RawStdEncoding.DecodeString(vals[5])
-	if err != nil {
-		return false, err
-	}
-
-	p.keyLength = uint32(len(hash))
-
-	// Générer le hash du mot de passe à vérifier
-	otherHash := argon2.IDKey([]byte(password), salt, p.iterations,
-		p.memory, p.parallelism, p.keyLength)
-
-	// Comparaison sécurisée (résistante aux timing attacks)
-	if subtle.ConstantTimeCompare(hash, otherHash) == 1 {
-		return true, nil
-	}
-	return false, nil
-}
-
 func createExampleConfig(filename string) error {
 	example := &Config{
 		SiteName:    "Mon Blog Tech",
@@ -317,7 +232,7 @@ func handleExampleCreation() error {
 	}
 
 	fmt.Printf("✅ Fichier exemple créé: %s\n", filename)
-	fmt.Println("⚠️  Admin_pass sera automatiquement hash dans Admin_hash au premier lancement")
+	fmt.Println("⚠️  Admin_pass sera automatiquement hash en argon2 dans Admin_hash au premier lancement")
 	return nil
 }
 
@@ -336,11 +251,15 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 	}
 
 	if conf.Admin_pass != "" {
-		hash, err := HashPassword(conf.Admin_pass)
+		if len(conf.Admin_pass) < 8 {
+			return nil, fmt.Errorf("le mot de passe doit contenir au moins 8 caractères")
+		}
+
+		hash, err := argon2.GenerateFromPassword([]byte(conf.Admin_pass), argon2.DefaultParams)
 		if err != nil {
 			return nil, err
 		}
-		conf.Admin_hash = hash
+		conf.Admin_hash = string(hash)
 		conf.Admin_pass = ""
 		err = writeConfigYaml(configFile, conf)
 		if err != nil {
@@ -517,79 +436,12 @@ N'hésitez pas à laisser un commentaire !`,
 			LikeCount: 5,
 			TagsList:  []string{"accueil", "présentation"},
 		},
-		{
-			Title: "Guide d'utilisation de Gin Gonic",
-			Content: `# Gin Gonic en pratique
-
-Gin est un framework web très performant pour Go. Voici les bases :
-
-## Installation
-
-` + "```bash" + `
-go mod init mon-projet
-go get github.com/gin-gonic/gin
-` + "```" + `
-
-## Premier serveur
-
-` + "```go" + `
-func main() {
-    r := gin.Default()
-    r.GET("/", func(c *gin.Context) {
-        c.JSON(200, gin.H{"message": "Hello World"})
-    })
-    r.Run(":8080")
-}
-` + "```" + `
-
-## Avec GORM
-
-` + "```go" + `
-import (
-    "gorm.io/driver/sqlite"
-    "gorm.io/gorm"
-)
-
-db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
-` + "```" + `
-
-## Avantages
-
-- Performance excellente
-- Middleware système
-- Binding automatique
-- Documentation complète`,
-			Excerpt:   "Un guide pratique pour débuter avec le framework Gin Gonic en Go.",
-			Author:    "Admin",
-			LikeCount: 12,
-			TagsList:  []string{"go", "gin", "tutorial"},
-		},
 	}
 
 	for i := range posts {
 		result := db.Create(&posts[i])
 		if result.Error != nil {
 			log.Printf("Erreur création post %d: %v", i+1, result.Error)
-		}
-	}
-
-	comments := []Comment{
-		{
-			PostID:  1,
-			Author:  "Jean",
-			Content: "Très bon article d'introduction ! Hâte de voir la suite.",
-		},
-		{
-			PostID:  1,
-			Author:  "Marie",
-			Content: "L'interface est très propre, bravo ! SQLite est un bon choix.",
-		},
-	}
-
-	for i := range comments {
-		result := db.Create(&comments[i])
-		if result.Error != nil {
-			log.Printf("Erreur création commentaire %d: %v", i+1, result.Error)
 		}
 	}
 
@@ -835,13 +687,6 @@ func main() {
 	}
 	r := gin.Default()
 
-	// ZgotmplZ
-	r.SetFuncMap(template.FuncMap{
-		"safeCSS":  safeCSS,
-		"escapeJS": escapeJS,
-		"jsonify":  jsonify,
-	})
-
 	// use Compression, with gzip, zstd, brotli
 	compress, _ := gincompress.DefaultAdapter()
 	r.Use(compress)
@@ -882,8 +727,16 @@ func main() {
 
 	r.Static("/static", "./static")
 
-	// Charger les templates
-	r.LoadHTMLGlob("templates/**/*.html")
+	// fonctions en go disponible depuis les templates
+	tmpl := template.New("").Funcs(template.FuncMap{
+		"safeCSS":  safeCSS,
+		"escapeJS": escapeJS,
+		"jsonify":  jsonify,
+	})
+
+	// parser les templates
+	tmpl = template.Must(tmpl.ParseFS(templatesFS, "templates/**/*.html"))
+	r.SetHTMLTemplate(tmpl)
 
 	// Routes publiques
 	r.GET("/", indexHandler)
@@ -1014,7 +867,7 @@ func loginPageHandler(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "login.html", gin.H{
+	c.HTML(http.StatusOK, "admin_login", gin.H{
 		"title":    "Connexion Admin",
 		"siteName": configuration.SiteName,
 		"theme":    theme,
@@ -1029,8 +882,8 @@ func loginHandler(c *gin.Context) {
 	}
 
 	// Vérification login / pass
-	passOk, err := VerifyPassword(req.Password, configuration.Admin_hash)
-	if err != nil || req.Username != configuration.Admin_login || !passOk {
+	err := argon2.CompareHashAndPassword([]byte(configuration.Admin_hash), []byte(req.Password))
+	if err != nil || req.Username != configuration.Admin_login {
 		log.Printf("Tentative de connexion échouée - User: %s, IP: %s", req.Username, c.ClientIP())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Identifiants incorrects"})
 		return
