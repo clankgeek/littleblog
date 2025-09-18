@@ -635,28 +635,53 @@ func jsonify(v any) template.JS {
 	return template.JS(b)
 }
 
-func parseCommandLineArgs() (configFile string, shouldCreateExample bool, versionDisplay bool, err error) {
-	var config = flag.String("config", "", "Fichier de configuration YAML")
-	var example = flag.Bool("example", false, "Créer un fichier de configuration exemple")
-	var version = flag.Bool("version", false, "version du produit")
-	flag.Parse()
+func middlewareCORS(c *gin.Context) {
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-	if *version {
-		return "", false, true, nil
+	if c.Request.Method == "OPTIONS" {
+		c.AbortWithStatus(204)
+		return
 	}
 
-	if *example {
-		return "", true, false, nil
-	}
-
-	if *config == "" {
-		return "", false, false, fmt.Errorf("fichier de configuration requis")
-	}
-
-	return *config, false, false, nil
+	c.Next()
 }
 
-func main() {
+func newMiddlewareLimiter() gin.HandlerFunc {
+	rate := limiter.Rate{
+		Period: 1 * time.Minute,
+		Limit:  5,
+	}
+	mstore := memory.NewStore()
+	instance := limiter.New(mstore, rate)
+	return ginlimiter.NewMiddleware(instance)
+}
+
+func newMiddlewareSession() gin.HandlerFunc {
+	store := cookie.NewStore(generateSecretKey())
+	store.Options(sessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 7,
+		HttpOnly: true,
+		Secure:   configuration.Production,
+	})
+	return sessions.Sessions("littleblog", store)
+}
+
+func getTemplates() *template.Template {
+	// fonctions en go disponible depuis les templates
+	tmpl := template.New("").Funcs(template.FuncMap{
+		"safeCSS":  safeCSS,
+		"escapeJS": escapeJS,
+		"jsonify":  jsonify,
+	})
+
+	// parser les templates
+	return template.Must(tmpl.ParseFS(templatesFS, "templates/**/*.html"))
+}
+
+func initConfiguration() {
 	configFile, shouldCreateExample, versionDisplay, err := parseCommandLineArgs()
 	if err != nil {
 		fmt.Println("Usage:")
@@ -668,7 +693,7 @@ func main() {
 
 	if versionDisplay {
 		println(VERSION)
-		return
+		os.Exit(0)
 	}
 
 	// Handle example creation
@@ -676,72 +701,47 @@ func main() {
 		if err := handleExampleCreation(); err != nil {
 			log.Fatalf("❌ %v", err)
 		}
-		return
+		os.Exit(1)
 	}
 
 	// Load and validate configuration
 	conf, err := loadAndConvertConfig(configFile)
 	if err != nil {
 		log.Fatalf("❌ %v", err)
+		os.Exit(1)
 	}
 	configuration = conf
+}
 
-	initMarkdown()
-	initDatabase()
+func setMiddleware(r *gin.Engine) {
+	// use Compression, with gzip
+	r.Use(gzip.Gzip(gzip.BestSpeed))
 
+	// Configuration des sessions
+	r.Use(newMiddlewareSession())
+
+	// CORS
+	r.Use(middlewareCORS)
+}
+
+func newServer() *gin.Engine {
 	if configuration.Production {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
 
-	// use Compression, with gzip
-	r.Use(gzip.Gzip(gzip.BestSpeed))
-
-	// middleware rate limiter
-	rate := limiter.Rate{
-		Period: 1 * time.Minute,
-		Limit:  5,
-	}
-	mstore := memory.NewStore()
-	instance := limiter.New(mstore, rate)
-	middlewareLimiter := ginlimiter.NewMiddleware(instance)
-
-	// Configuration des sessions
-	store := cookie.NewStore(generateSecretKey())
-	store.Options(sessions.Options{
-		Path:     "/",
-		MaxAge:   86400 * 7,
-		HttpOnly: true,
-		Secure:   configuration.Production,
-	})
-	r.Use(sessions.Sessions("littleblog", store))
-
-	// CORS
-	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	})
-
-	r.Static("/static", "./static")
-
-	// fonctions en go disponible depuis les templates
-	tmpl := template.New("").Funcs(template.FuncMap{
-		"safeCSS":  safeCSS,
-		"escapeJS": escapeJS,
-		"jsonify":  jsonify,
-	})
-
 	// parser les templates
-	tmpl = template.Must(tmpl.ParseFS(templatesFS, "templates/**/*.html"))
-	r.SetHTMLTemplate(tmpl)
+	r.SetHTMLTemplate(getTemplates())
+
+	return r
+}
+
+func setRoutes(r *gin.Engine) {
+	// middleware rate limiter
+	middlewareLimiter := newMiddlewareLimiter()
+
+	// Route statique
+	r.Static("/static", "./static")
 
 	// Routes publiques
 	r.GET("/", indexHandler)
@@ -785,7 +785,9 @@ func main() {
 	r.GET("/rss", rssHandler)       // Alias commun
 	r.GET("/rss.xml", rssHandler)   // Alias commun
 	r.GET("/atom.xml", atomHandler) // Alias commun
+}
 
+func startServer(r *gin.Engine) {
 	listen := ""
 	if strings.HasPrefix(configuration.Listen, ":") {
 		listen = "localhost" + configuration.Listen
@@ -794,6 +796,40 @@ func main() {
 	log.Printf("Serveur démarré sur http://%s\n", listen)
 	log.Printf("Admin: http://%s/admin/login\n", listen)
 	r.Run(configuration.Listen)
+}
+
+func parseCommandLineArgs() (configFile string, shouldCreateExample bool, versionDisplay bool, err error) {
+	var config = flag.String("config", "", "Fichier de configuration YAML")
+	var example = flag.Bool("example", false, "Créer un fichier de configuration exemple")
+	var version = flag.Bool("version", false, "version du produit")
+	flag.Parse()
+
+	if *version {
+		return "", false, true, nil
+	}
+
+	if *example {
+		return "", true, false, nil
+	}
+
+	if *config == "" {
+		return "", false, false, fmt.Errorf("fichier de configuration requis")
+	}
+
+	return *config, false, false, nil
+}
+
+func main() {
+	initConfiguration()
+	initMarkdown()
+	initDatabase()
+
+	r := newServer()
+
+	setMiddleware(r)
+	setRoutes(r)
+
+	startServer(r)
 }
 
 // ============= HANDLERS PUBLICS =============
