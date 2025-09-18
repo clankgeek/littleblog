@@ -124,6 +124,7 @@ type Config struct {
 	Admin_pass  string `yaml:"admin_pass"`
 	Admin_hash  string `yaml:"admin_pass_hash"`
 	Production  bool   `yaml:"production"`
+	Listen      string `yaml:"listen"`
 }
 
 // RSS représente le flux RSS complet
@@ -212,6 +213,7 @@ func createExampleConfig(filename string) error {
 		Admin_pass:  "admin123",
 		Admin_hash:  "",
 		Production:  false,
+		Listen:      ":8080",
 	}
 	return writeConfigYaml(filename, example)
 }
@@ -250,6 +252,10 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 		return nil, fmt.Errorf("DBPath ne peut pas etre vide")
 	}
 
+	if conf.Listen == "" {
+		conf.Listen = ":8080"
+	}
+
 	if conf.Admin_pass != "" {
 		if len(conf.Admin_pass) < 8 {
 			return nil, fmt.Errorf("le mot de passe doit contenir au moins 8 caractères")
@@ -283,6 +289,7 @@ func convertConfig(yamlConfig *Config) *Config {
 		Admin_pass:  yamlConfig.Admin_pass,
 		Admin_hash:  yamlConfig.Admin_hash,
 		Production:  yamlConfig.Production,
+		Listen:      yamlConfig.Listen,
 	}
 
 	return conf
@@ -779,9 +786,14 @@ func main() {
 	r.GET("/rss.xml", rssHandler)   // Alias commun
 	r.GET("/atom.xml", atomHandler) // Alias commun
 
-	log.Println("Serveur démarré sur http://localhost:8080")
-	log.Println("Admin: http://localhost:8080/admin/login")
-	r.Run(":8080")
+	listen := ""
+	if strings.HasPrefix(configuration.Listen, ":") {
+		listen = "localhost" + configuration.Listen
+	}
+
+	log.Printf("Serveur démarré sur http://%s\n", listen)
+	log.Printf("Admin: http://%s/admin/login\n", listen)
+	r.Run(configuration.Listen)
 }
 
 // ============= HANDLERS PUBLICS =============
