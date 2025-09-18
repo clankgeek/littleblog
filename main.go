@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 
-	gincompress "github.com/CAFxX/httpcompression/contrib/gin-gonic/gin"
 	"github.com/andskur/argon2-hashing"
 	"github.com/ulule/limiter/v3"
 	ginlimiter "github.com/ulule/limiter/v3/drivers/middleware/gin"
@@ -687,10 +687,8 @@ func main() {
 	}
 	r := gin.Default()
 
-	// use Compression, with gzip, zstd, brotli
-	compress, _ := gincompress.DefaultAdapter()
-	r.Use(compress)
-	//r.Use(gzip.Gzip(gzip.BestSpeed))
+	// use Compression, with gzip
+	r.Use(gzip.Gzip(gzip.BestSpeed))
 
 	// middleware rate limiter
 	rate := limiter.Rate{
