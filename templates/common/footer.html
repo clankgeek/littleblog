@@ -17,7 +17,7 @@
             </div>
             <div class="footer-section">
                 <h4>Informations</h4>
-                <p>&copy; {{ if .currentYear }}{{ .currentYear }}{{ else }}2025{{ end }} <a href="https://github.com/clankgeek/littleblog">Propulsé par littleblog</p>
+                <p>&copy; {{ if .currentYear }}{{ .currentYear }}{{ else }}2025{{ end }} <a href="https://github.com/clankgeek/littleblog">Propulsé par littleblog {{ if .version }}{{ .version }}{{ end }}</p>
             </div>
         </div>
     </div>

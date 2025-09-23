@@ -4,6 +4,7 @@
 <head>
     {{ template "head" . }}
     <style>
+        {{ template "cookie_styles" . }}
         {{ template "common_styles" . }}
         {{ template "common_footer_styles" . }}
         {{ template "public_header_styles" . }}
@@ -12,12 +13,14 @@
 </head>
 <body>
     {{ template "public_header" . }}
+    {{ template "cookie_content" . }}
     <main class="main">
         {{ template "index_content" . }}
     </main>
     {{ template "footer" . }}
     {{ template "index_scripts" . }}
     {{ template "common_scripts" . }}
+    {{ template "cookie_scripts" . }}
 </body>
 </html>
 {{ end }}

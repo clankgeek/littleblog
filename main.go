@@ -43,7 +43,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-const VERSION = "0.5.0"
+const VERSION string = "0.5.0"
 
 // global instance
 var (
@@ -857,6 +857,7 @@ func indexHandler(c *gin.Context) {
 		"currentYear":     time.Now().Year(),
 		"ogType":          "website",
 		"theme":           theme,
+		"version":         VERSION,
 	})
 }
 
@@ -870,6 +871,7 @@ func postHandler(c *gin.Context) {
 			"description": "La page que vous recherchez n'existe pas.",
 			"currentYear": time.Now().Year(),
 			"theme":       theme,
+			"version":     VERSION,
 		})
 		return
 	}
@@ -883,6 +885,7 @@ func postHandler(c *gin.Context) {
 			"description": "L'article que vous recherchez n'existe pas.",
 			"currentYear": time.Now().Year(),
 			"theme":       theme,
+			"version":     VERSION,
 		})
 		return
 	}
@@ -901,6 +904,7 @@ func postHandler(c *gin.Context) {
 		"ogTitle":         post.Title,
 		"ogType":          "article",
 		"theme":           theme,
+		"version":         VERSION,
 	})
 }
 
@@ -917,6 +921,7 @@ func loginPageHandler(c *gin.Context) {
 		"title":    "Connexion Admin",
 		"siteName": configuration.SiteName,
 		"theme":    theme,
+		"version":  VERSION,
 	})
 }
 
@@ -988,6 +993,7 @@ func adminDashboardHandler(c *gin.Context) {
 		"currentYear": time.Now().Year(),
 		"isAdmin":     true,
 		"theme":       theme,
+		"version":     VERSION,
 	})
 }
 
@@ -1119,6 +1125,7 @@ func adminPostsHandler(c *gin.Context) {
 		"currentYear": time.Now().Year(),
 		"isAdmin":     true,
 		"theme":       theme,
+		"version":     VERSION,
 	})
 }
 
@@ -1137,6 +1144,7 @@ func newPostPageHandler(c *gin.Context) {
 		"currentYear": time.Now().Year(),
 		"isAdmin":     true,
 		"theme":       theme,
+		"version":     VERSION,
 	})
 }
 
@@ -1170,6 +1178,7 @@ func editPostPageHandler(c *gin.Context) {
 		"currentYear": time.Now().Year(),
 		"isAdmin":     true,
 		"theme":       theme,
+		"version":     VERSION,
 	})
 }
 
