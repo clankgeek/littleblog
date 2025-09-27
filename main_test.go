@@ -1182,7 +1182,7 @@ func TestDatabaseMigration(t *testing.T) {
 	assert.Contains(t, columnNames, "author")
 }
 
-// ============= Tests pour les flux RSS/Atom =============
+// ============= Tests pour les flux RSS =============
 func TestRSSHandler(t *testing.T) {
 	testDB := setupTestDB(t)
 	db = testDB
@@ -1224,45 +1224,6 @@ func TestRSSHandler(t *testing.T) {
 	assert.Equal(t, "Post 3", firstItem.Title) // Le plus récent
 	assert.Equal(t, "http://localhost:8080/post/3", firstItem.Link)
 	assert.Equal(t, "Excerpt 3", firstItem.Description)
-}
-
-func TestAtomHandler(t *testing.T) {
-	testDB := setupTestDB(t)
-	db = testDB
-	r := setupTestRouter()
-	configuration = setupTestConfig()
-
-	// Créer un post de test
-	post := &Post{
-		Title:   "Atom Test Post",
-		Content: "Atom test content",
-		Excerpt: "Atom excerpt",
-		Author:  "Atom Author",
-	}
-	testDB.Create(post)
-
-	r.GET("/feed/atom", atomHandler)
-
-	req := httptest.NewRequest("GET", "/feed/atom", nil)
-	req.Host = "example.com"
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Header().Get("Content-Type"), "application/atom+xml")
-
-	// Vérifier que le XML est valide
-	var atom Atom
-	err := xml.Unmarshal(w.Body.Bytes(), &atom)
-	assert.NoError(t, err)
-	assert.Equal(t, configuration.SiteName, atom.Title)
-	assert.Len(t, atom.Entry, 1)
-
-	// Vérifier le contenu de l'entrée
-	entry := atom.Entry[0]
-	assert.Equal(t, "Atom Test Post", entry.Title)
-	assert.Equal(t, "Atom excerpt", entry.Summary)
-	assert.Equal(t, "Atom Author", entry.Author.Name)
 }
 
 // Theme

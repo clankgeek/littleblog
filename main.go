@@ -157,47 +157,6 @@ type RSSItem struct {
 	PubDate     string `xml:"pubDate"`
 }
 
-// Atom représente le flux Atom
-type Atom struct {
-	XMLName xml.Name    `xml:"http://www.w3.org/2005/Atom feed"`
-	Title   string      `xml:"title"`
-	Link    []AtomLink  `xml:"link"`
-	Updated string      `xml:"updated"`
-	Author  AtomAuthor  `xml:"author"`
-	ID      string      `xml:"id"`
-	Entry   []AtomEntry `xml:"entry"`
-}
-
-// AtomLink représente un lien Atom
-type AtomLink struct {
-	Href string `xml:"href,attr"`
-	Rel  string `xml:"rel,attr,omitempty"`
-	Type string `xml:"type,attr,omitempty"`
-}
-
-// AtomAuthor représente l'auteur dans Atom
-type AtomAuthor struct {
-	Name string `xml:"name"`
-}
-
-// AtomEntry représente une entrée Atom
-type AtomEntry struct {
-	Title     string      `xml:"title"`
-	Link      []AtomLink  `xml:"link"`
-	ID        string      `xml:"id"`
-	Updated   string      `xml:"updated"`
-	Published string      `xml:"published"`
-	Author    AtomAuthor  `xml:"author"`
-	Summary   string      `xml:"summary"`
-	Content   AtomContent `xml:"content"`
-}
-
-// AtomContent représente le contenu dans Atom
-type AtomContent struct {
-	Type  string `xml:"type,attr"`
-	Value string `xml:",cdata"`
-}
-
 // Color représente une couleur RGB
 type Color struct {
 	R, G, B int
@@ -778,13 +737,11 @@ func setRoutes(r *gin.Engine) {
 		api.GET("/search", searchPostsAPI)
 	}
 
-	// Routes des flux RSS/Atom
+	// Routes des flux RSS
 	r.GET("/feed", rssHandler)
 	r.GET("/feed/rss", rssHandler)
-	r.GET("/feed/atom", atomHandler)
-	r.GET("/rss", rssHandler)       // Alias commun
-	r.GET("/rss.xml", rssHandler)   // Alias commun
-	r.GET("/atom.xml", atomHandler) // Alias commun
+	r.GET("/rss", rssHandler)     // Alias commun
+	r.GET("/rss.xml", rssHandler) // Alias commun
 }
 
 func startServer(r *gin.Engine) {
@@ -1381,87 +1338,6 @@ func rssHandler(c *gin.Context) {
 	xmlWithHeader := []byte(xml.Header + string(output))
 
 	c.Data(http.StatusOK, "application/rss+xml; charset=utf-8", xmlWithHeader)
-}
-
-// atomHandler génère le flux Atom des posts
-func atomHandler(c *gin.Context) {
-	// Récupérer les 20 derniers posts
-	var posts []Post
-	result := db.Order("created_at desc").Limit(20).Find(&posts)
-	if result.Error != nil {
-		c.XML(http.StatusInternalServerError, gin.H{"error": "Erreur récupération posts"})
-		return
-	}
-
-	// Obtenir l'URL de base
-	scheme := "http"
-	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	baseURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
-
-	// Construire le flux Atom
-	atom := Atom{
-		Title:   configuration.SiteName,
-		ID:      baseURL,
-		Updated: time.Now().Format(time.RFC3339),
-		Author: AtomAuthor{
-			Name: configuration.SiteName,
-		},
-		Link: []AtomLink{
-			{
-				Href: baseURL,
-				Rel:  "alternate",
-				Type: "text/html",
-			},
-			{
-				Href: fmt.Sprintf("%s/feed/atom", baseURL),
-				Rel:  "self",
-				Type: "application/atom+xml",
-			},
-		},
-		Entry: make([]AtomEntry, 0, len(posts)),
-	}
-
-	// Convertir les posts en entrées Atom
-	for _, post := range posts {
-		summary := post.Excerpt
-		if summary == "" {
-			if len(post.Content) > 200 {
-				summary = post.Content[:200] + "..."
-			} else {
-				summary = post.Content
-			}
-		}
-
-		entry := AtomEntry{
-			Title:     post.Title,
-			ID:        fmt.Sprintf("%s/post/%d", baseURL, post.ID),
-			Updated:   post.UpdatedAt.Format(time.RFC3339),
-			Published: post.CreatedAt.Format(time.RFC3339),
-			Author: AtomAuthor{
-				Name: post.Author,
-			},
-			Summary: summary,
-			Content: AtomContent{
-				Type:  "html",
-				Value: string(post.ContentHTML),
-			},
-			Link: []AtomLink{
-				{
-					Href: fmt.Sprintf("%s/post/%d", baseURL, post.ID),
-					Rel:  "alternate",
-					Type: "text/html",
-				},
-			},
-		}
-
-		atom.Entry = append(atom.Entry, entry)
-	}
-
-	// Définir le content-type approprié
-	c.Header("Content-Type", "application/atom+xml; charset=utf-8")
-	c.XML(http.StatusOK, atom)
 }
 
 func getPostsAPI(c *gin.Context) {
