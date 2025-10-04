@@ -22,7 +22,7 @@ GOMOD=$(GOCMD) mod
 .PHONY: all build clean test test-unit test-integration test-bench deps help install run dev example cross-compile deb deb-clean
 
 # Default target
-all: build
+all: help
 
 # Build the project
 build:

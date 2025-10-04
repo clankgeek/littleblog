@@ -378,23 +378,32 @@ func seedDatabase() {
 			Title: "Bienvenue sur mon blog",
 			Content: `# Bienvenue !
 
-Ceci est le premier article de mon blog développé avec **Gin Gonic** et **Alpine.js**.
+Ceci est le premier article avec le moteur de blog **littleblog**, qui utilise un backend en **Gin Gonic** et un frontend en **Alpine.js**.
 
 ## Fonctionnalités
 
+- Infinity scroll sur la liste des articles
 - Articles avec contenu Markdown
-- Système de commentaires
-- Recherche en temps réel  
-- Système de likes
-- Interface responsive
-- **Base de données SQLite + GORM**
-- **Administration des articles** 🔐
+- Recherche en temps réel
+- Administration des articles
+- Upload d'images
 
-## Technologies utilisées
+## Composants
 
-- **Backend**: Go + Gin Gonic + GORM + SQLite
-- **Frontend**: HTML + Alpine.js
-- **Auth**: Sessions + middleware
+- Backend
+  - Language Go
+  - Gin Web Framework
+  - Accès à la base de données avec GORM
+  - Base de données Sqlite3
+  - Middleware Session pour la page d'administration
+  - Templates inclus dans le binaire
+  - Configuration en Yaml (autogénéré par le binaire)
+  - API RESTful (json)
+
+- Frontend
+  - Html + CSS (via template Gin)
+  - Framework Alpine.js
+  - **N'utilise pas nodejs**
 
 N'hésitez pas à laisser un commentaire !`,
 			Excerpt:   "Premier article de présentation du blog avec les technologies utilisées.",
