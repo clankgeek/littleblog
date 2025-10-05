@@ -219,22 +219,6 @@
     border-top: 1px solid var(--border-color);
 }
 
-.read-more {
-    background: white;
-    color: var(--primary-color);
-    padding: 10px 20px;
-    border-radius: var(--border-radius);
-    text-decoration: none;
-    font-weight: 500;
-    transition: var(--transition);
-}
-
-.read-more:hover {
-    color: white;
-    background: var(--primary-hover);
-    transform: translateX(2px);
-}
-
 .article-stats {
     display: flex;
     gap: 15px;
@@ -580,7 +564,7 @@ function infiniteScroll() {
             
             try {
                 // Appel API pour récupérer les articles
-                const response = await fetch(`/api/posts?page=${this.page}&limit=${this.perPage}`);
+                const response = await fetch(`/api/posts?page=${this.page}&limit=${this.perPage}&category={{ .category }}`);
                 const data = await response.json();
                 
                 // Retirer les skeletons

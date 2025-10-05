@@ -2,7 +2,7 @@
 <div class="header">
     <div class="container">
         <nav class="nav">
-            <a href="/" class="logo">{{ if .siteName }}{{ .siteName }}{{ else }}Mon Blog Tech{{ end }}</a> {{ .description }}
+            <a href="/" class="logo">{{ .siteName }}</a> {{ .description }}
             <div class="nav-actions">
                 {{ if .showSearch }}
                 <div x-data="searchComponent" class="search-container">
@@ -29,6 +29,9 @@
                 {{ end }}
             </div>
         </nav>
+        <div class="nav-links">
+            {{ .menu }}
+        </div>
     </div>
 </div>
 {{ end }}

@@ -1232,3 +1232,9 @@ func TestTheme(t *testing.T) {
 	assert.Equal(t, GenerateThemeCSS("blue"), GenerateThemeCSS("#007bff"))
 	assert.Equal(t, GenerateThemeCSS("red"), GenerateThemeCSS("#dc3545"))
 }
+
+func TestSlugify(t *testing.T) {
+	assert.Equal(t, "", slugify(""))
+	assert.Equal(t, "abcd01234--", slugify("abcd01234--"))
+	assert.Equal(t, "abc-d01234--", slugify("%#abc d01234--"))
+}

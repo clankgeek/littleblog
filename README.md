@@ -9,10 +9,9 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 - Recherche en temps réel
 - Administration des articles
 - Upload d'images
+- Menu avec différente catégories
 
 ## TODO
-
-- Catégorie
 
 ## Composants
 

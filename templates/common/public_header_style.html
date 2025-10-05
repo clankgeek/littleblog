@@ -9,10 +9,54 @@
     z-index: 100;
 }
 
+.nav-links {
+    display: flex;
+    gap: 15px;
+}
+
+.nav-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: var(--border-radius);
+    transition: var(--transition);
+    position: relative;
+}
+
+.nav-link:hover {
+    background: var(--light-color);
+}
+
+.nav-link.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+.nav-link.active:hover {
+    background: var(--primary-hover);
+}
+
+
 .nav {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+.read-more {
+    background: white;
+    color: var(--primary-color);
+    padding: 10px 20px;
+    border-radius: var(--border-radius);
+    text-decoration: none;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.read-more:hover {
+    color: white;
+    background: var(--primary-hover);
+    transform: translateX(2px);
 }
 
 .logo {

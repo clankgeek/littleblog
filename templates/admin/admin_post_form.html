@@ -487,6 +487,17 @@ textarea.form-control {
                 </div>
                 {{ end }}
 
+                <!-- Category -->
+                <div class="sidebar-card">
+                    <h3 class="sidebar-title">🏷️ Catégorie</h3>
+                    <div class="tags-input">
+                        <select x-model="post.category" class="tag-input">
+                            <option value="">--Aucune--</option>
+                            {{ .optionsCategory }}
+                        </select>
+                    </div>
+                </div>
+
                 <!-- Tags -->
                 <div class="sidebar-card">
                     <h3 class="sidebar-title">🏷️ Tags</h3>
@@ -529,6 +540,7 @@ document.addEventListener('alpine:init', () => {
             content: {{ if .isEdit }}`{{ .post.Content }}`{{ else }}''{{ end }},
             excerpt: {{ if .isEdit }}'{{ .post.Excerpt }}'{{ else }}''{{ end }},
             author: {{ if .isEdit }}'{{ .post.Author }}'{{ else }}''{{ end }},
+            category: {{ if .isEdit }}'{{ .post.Category }}'{{ else }}''{{ end }},
             tags: {{ if .isEdit }}{{ .post.TagsList | jsonify }}{{ else }}[]{{ end }}
         },
         uploading: false,

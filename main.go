@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/sessions"
@@ -51,6 +52,7 @@ var (
 	md            goldmark.Markdown
 	configuration *Config
 	theme         string
+	rsslink       template.HTML
 )
 
 //go:embed templates/**/*.html
@@ -68,6 +70,7 @@ type Post struct {
 	UpdatedAt   time.Time     `json:"updated_at" gorm:"autoUpdateTime"`
 	LikeCount   int           `json:"like_count" gorm:"default:0"`
 	Tags        string        `json:"-" gorm:"type:text"`
+	Category    string        `json:"category" gorm:"type:text"`
 	TagsList    []string      `json:"tags" gorm:"-"`
 	Comments    []Comment     `json:"comments,omitempty" gorm:"foreignKey:PostID"`
 }
@@ -101,30 +104,38 @@ type LoginRequest struct {
 }
 
 type CreatePostRequest struct {
-	Title   string   `json:"title" binding:"required"`
-	Content string   `json:"content" binding:"required"`
-	Excerpt string   `json:"excerpt"`
-	Author  string   `json:"author"`
-	Tags    []string `json:"tags"`
+	Title    string   `json:"title" binding:"required"`
+	Content  string   `json:"content" binding:"required"`
+	Excerpt  string   `json:"excerpt"`
+	Author   string   `json:"author"`
+	Tags     []string `json:"tags"`
+	Category string   `json:"category"`
 }
 
 type UpdatePostRequest struct {
-	Title   string   `json:"title" binding:"required"`
-	Content string   `json:"content" binding:"required"`
-	Excerpt string   `json:"excerpt"`
-	Tags    []string `json:"tags"`
+	Title    string   `json:"title" binding:"required"`
+	Content  string   `json:"content" binding:"required"`
+	Excerpt  string   `json:"excerpt"`
+	Tags     []string `json:"tags"`
+	Category string   `json:"category"`
 }
 
 type Config struct {
-	SiteName    string `yaml:"sitename"`
-	Description string `yaml:"description"`
-	Theme       string `yaml:"theme"`
-	DBPath      string `yaml:"dbpath"`
-	Admin_login string `yaml:"admin_login"`
-	Admin_pass  string `yaml:"admin_pass"`
-	Admin_hash  string `yaml:"admin_pass_hash"`
-	Production  bool   `yaml:"production"`
-	Listen      string `yaml:"listen"`
+	SiteName    string     `yaml:"sitename"`
+	Description string     `yaml:"description"`
+	Theme       string     `yaml:"theme"`
+	DBPath      string     `yaml:"dbpath"`
+	Admin_login string     `yaml:"admin_login"`
+	Admin_pass  string     `yaml:"admin_pass"`
+	Admin_hash  string     `yaml:"admin_pass_hash"`
+	Production  bool       `yaml:"production"`
+	Listen      string     `yaml:"listen"`
+	Menu        []MenuItem `yaml:"menu"`
+}
+
+type MenuItem struct {
+	Key   string `yaml:"key"`
+	Value string `yaml:"value"`
 }
 
 // RSS représente le flux RSS complet
@@ -173,6 +184,10 @@ func createExampleConfig(filename string) error {
 		Admin_hash:  "",
 		Production:  false,
 		Listen:      ":8080",
+		Menu: []MenuItem{
+			{Key: "menu1", Value: "Mon premier menu"},
+			{Key: "menu2", Value: "Mon second menu"},
+		},
 	}
 	return writeConfigYaml(filename, example)
 }
@@ -233,6 +248,7 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 	}
 
 	theme = GenerateThemeCSS(conf.Theme)
+	rsslink = GenerateDynamicRSS(conf)
 
 	return conf, nil
 }
@@ -249,6 +265,7 @@ func convertConfig(yamlConfig *Config) *Config {
 		Admin_hash:  yamlConfig.Admin_hash,
 		Production:  yamlConfig.Production,
 		Listen:      yamlConfig.Listen,
+		Menu:        yamlConfig.Menu,
 	}
 
 	return conf
@@ -370,6 +387,13 @@ func initDatabase() {
 	log.Println("Base de données initialisée avec succès")
 }
 
+func getFirstMenuKey(conf *Config) string {
+	if len(conf.Menu) > 0 {
+		return slugify(conf.Menu[0].Key)
+	}
+	return ""
+}
+
 func seedDatabase() {
 	log.Println("Création des données d'exemple...")
 
@@ -410,6 +434,7 @@ N'hésitez pas à laisser un commentaire !`,
 			Author:    "Admin",
 			LikeCount: 5,
 			TagsList:  []string{"accueil", "présentation"},
+			Category:  getFirstMenuKey(configuration),
 		},
 	}
 
@@ -496,6 +521,28 @@ func HexToColor(hex string) Color {
 	return Color{int(r), int(g), int(b)}
 }
 
+func GenerateMenu(items []MenuItem, category string) template.HTML {
+	menuStr := ""
+	for _, item := range items {
+		key := slugify(item.Key)
+		active := ""
+		if key == category {
+			active = " active"
+		}
+		menuStr += fmt.Sprintf("<a href=\"/%s\" class=\"nav-link%s\">%s</a>&nbsp;", key, active, item.Value)
+	}
+	return safeHtml(menuStr)
+}
+
+func GenerateDynamicRSS(conf *Config) template.HTML {
+	rssStr := ""
+	for _, item := range conf.Menu {
+		slugifiedKey := slugify(item.Key)
+		rssStr += fmt.Sprintf("<link rel=\"alternate\" type=\"application/rss+xml\" title=\"%s - %s\" href=\"/rss.xml/%s\"/>\n", conf.SiteName, slugifiedKey, slugifiedKey)
+	}
+	return safeHtml(rssStr)
+}
+
 // GenerateThemeCSS génère le CSS pour un thème basé sur une couleur
 func GenerateThemeCSS(colorName string) string {
 	// Couleurs de base prédéfinies
@@ -572,6 +619,10 @@ func GenerateThemeCSS(colorName string) string {
 
 func safeCSS(css string) template.CSS {
 	return template.CSS(css)
+}
+
+func safeHtml(html string) template.HTML {
+	return template.HTML(html)
 }
 
 func escapeJS(s string) template.JS {
@@ -704,6 +755,22 @@ func newServer() *gin.Engine {
 	return r
 }
 
+func slugify(s string) string {
+	var result strings.Builder
+
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			result.WriteRune(r)
+		} else if unicode.IsSpace(r) {
+			result.WriteRune('-')
+		} else if r == '-' {
+			result.WriteRune(r)
+		}
+	}
+
+	return result.String()
+}
+
 func setRoutes(r *gin.Engine) {
 	// middleware rate limiter
 	middlewareLimiter := newMiddlewareLimiter()
@@ -713,6 +780,7 @@ func setRoutes(r *gin.Engine) {
 
 	// Routes publiques
 	r.GET("/", indexHandler)
+	r.GET("/:category", indexHandler)
 	r.GET("/post/:id", postHandler)
 
 	// Routes d'authentification
@@ -746,11 +814,9 @@ func setRoutes(r *gin.Engine) {
 		api.GET("/search", searchPostsAPI)
 	}
 
-	// Routes des flux RSS
-	r.GET("/feed", rssHandler)
-	r.GET("/feed/rss", rssHandler)
-	r.GET("/rss", rssHandler)     // Alias commun
-	r.GET("/rss.xml", rssHandler) // Alias commun
+	// Flux RSS
+	r.GET("/rss.xml", rssHandler)
+	r.GET("/rss.xml/:category", rssHandler)
 }
 
 func startServer(r *gin.Engine) {
@@ -801,29 +867,23 @@ func main() {
 // ============= HANDLERS PUBLICS =============
 
 func indexHandler(c *gin.Context) {
-	var posts []Post
-	// Limiter à 5 posts pour le rendu initial SSR
-	result := db.Order("created_at desc").Limit(5).Find(&posts)
-	if result.Error != nil {
-		log.Printf("Erreur récupération posts: %v", result.Error)
-		c.HTML(http.StatusInternalServerError, "index", gin.H{"error": "Erreur serveur"})
-		return
-	}
-
 	session := sessions.Default(c)
 	isAdmin := session.Get("user_id") != nil
+	category := slugify(c.Param("category"))
 
 	c.HTML(http.StatusOK, "index", gin.H{
 		"title":           configuration.SiteName,
 		"siteName":        configuration.SiteName,
 		"description":     configuration.Description,
-		"posts":           posts,
 		"isAuthenticated": isAdmin,
 		"showSearch":      true,
 		"currentYear":     time.Now().Year(),
 		"ogType":          "website",
 		"theme":           theme,
 		"version":         VERSION,
+		"category":        category,
+		"menu":            GenerateMenu(configuration.Menu, category),
+		"rsslink":         rsslink,
 	})
 }
 
@@ -871,6 +931,7 @@ func postHandler(c *gin.Context) {
 		"ogType":          "article",
 		"theme":           theme,
 		"version":         VERSION,
+		"menu":            GenerateMenu(configuration.Menu, post.Category),
 	})
 }
 
@@ -1095,22 +1156,32 @@ func adminPostsHandler(c *gin.Context) {
 	})
 }
 
+func getOptionsCategory() template.HTML {
+	var optionsCategory string
+	for _, item := range configuration.Menu {
+		slugifiedKey := slugify(item.Key)
+		optionsCategory += fmt.Sprintf("<option value=\"%s\">%s</option>", slugifiedKey, slugifiedKey)
+	}
+	return safeHtml(optionsCategory)
+}
+
 func newPostPageHandler(c *gin.Context) {
 	session := sessions.Default(c)
 	username := session.Get("username")
 
 	c.HTML(http.StatusOK, "admin_post_form", gin.H{
-		"title":       "Nouvel Article",
-		"siteName":    configuration.SiteName,
-		"pageTitle":   "Nouvel Article",
-		"pageIcon":    "➕",
-		"currentPage": "new_post",
-		"username":    username,
-		"isEdit":      false,
-		"currentYear": time.Now().Year(),
-		"isAdmin":     true,
-		"theme":       theme,
-		"version":     VERSION,
+		"title":           "Nouvel Article",
+		"siteName":        configuration.SiteName,
+		"pageTitle":       "Nouvel Article",
+		"pageIcon":        "➕",
+		"currentPage":     "new_post",
+		"username":        username,
+		"isEdit":          false,
+		"currentYear":     time.Now().Year(),
+		"isAdmin":         true,
+		"theme":           theme,
+		"version":         VERSION,
+		"optionsCategory": getOptionsCategory(),
 	})
 }
 
@@ -1133,18 +1204,19 @@ func editPostPageHandler(c *gin.Context) {
 	username := session.Get("username")
 
 	c.HTML(http.StatusOK, "admin_post_form", gin.H{
-		"title":       "Éditer Article",
-		"siteName":    configuration.SiteName,
-		"pageTitle":   "Éditer l'Article",
-		"pageIcon":    "✏️",
-		"currentPage": "edit_post",
-		"username":    username,
-		"post":        post,
-		"isEdit":      true,
-		"currentYear": time.Now().Year(),
-		"isAdmin":     true,
-		"theme":       theme,
-		"version":     VERSION,
+		"title":           "Éditer Article",
+		"siteName":        configuration.SiteName,
+		"pageTitle":       "Éditer l'Article",
+		"pageIcon":        "✏️",
+		"currentPage":     "edit_post",
+		"username":        username,
+		"post":            post,
+		"isEdit":          true,
+		"currentYear":     time.Now().Year(),
+		"isAdmin":         true,
+		"theme":           theme,
+		"version":         VERSION,
+		"optionsCategory": getOptionsCategory(),
 	})
 }
 
@@ -1172,6 +1244,7 @@ func createPostHandler(c *gin.Context) {
 		Excerpt:  strings.TrimSpace(req.Excerpt),
 		Author:   author,
 		TagsList: req.Tags,
+		Category: slugify(req.Category),
 	}
 
 	if post.Title == "" {
@@ -1217,6 +1290,7 @@ func updatePostHandler(c *gin.Context) {
 	post.Content = strings.TrimSpace(req.Content)
 	post.Excerpt = strings.TrimSpace(req.Excerpt)
 	post.TagsList = req.Tags
+	post.Category = slugify(req.Category)
 
 	result = db.Save(&post)
 	if result.Error != nil {
@@ -1271,9 +1345,17 @@ func deletePostHandler(c *gin.Context) {
 
 // rssHandler génère le flux RSS des posts
 func rssHandler(c *gin.Context) {
-	// Récupérer les 20 derniers posts
 	var posts []Post
-	result := db.Order("created_at desc").Limit(20).Find(&posts)
+
+	// Récupérer les 20 derniers posts
+	query := db.Order("created_at desc").Limit(20)
+
+	category := c.Param("category")
+	if category != "" {
+		query = query.Where("category = ?", slugify(category))
+	}
+
+	result := query.Find(&posts)
 	if result.Error != nil {
 		c.XML(http.StatusInternalServerError, gin.H{"error": "Erreur récupération posts"})
 		return
@@ -1315,10 +1397,12 @@ func rssHandler(c *gin.Context) {
 			}
 		}
 
-		// Créer les catégories à partir des tags
-		categories := ""
-		if len(post.TagsList) > 0 {
-			categories = post.TagsList[0] // RSS 2.0 ne supporte qu'une catégorie par item
+		// Category, si aucune catégorie, on prend le 1er tag
+		category := ""
+		if post.Category != "" {
+			category = post.Category
+		} else if len(post.TagsList) > 0 {
+			category = post.TagsList[0] // RSS 2.0 ne supporte qu'une catégorie par item
 		}
 
 		item := RSSItem{
@@ -1326,7 +1410,7 @@ func rssHandler(c *gin.Context) {
 			Link:        fmt.Sprintf("%s/post/%d", baseURL, post.ID),
 			Description: description,
 			Author:      post.Author,
-			Category:    categories,
+			Category:    category,
 			GUID:        fmt.Sprintf("%s/post/%d", baseURL, post.ID),
 			PubDate:     post.CreatedAt.Format(time.RFC1123Z),
 		}
@@ -1364,16 +1448,27 @@ func getPostsAPI(c *gin.Context) {
 		limit = 50
 	}
 
+	category := slugify(c.DefaultQuery("category", ""))
+
 	// Calcul de l'offset
 	offset := (page - 1) * limit
 
+	buildQuery := func() *gorm.DB {
+		query := db.Model(&Post{})
+		if category != "" {
+			query = query.Where("category = ?", category)
+		}
+		return query
+	}
+
 	// Compter le nombre total de posts
 	var total int64
-	db.Model(&Post{}).Count(&total)
+	buildQuery().Count(&total)
 
 	// Récupérer les posts avec leurs commentaires
 	var posts []Post
-	result := db.Preload("Comments").
+	result := buildQuery().
+		Preload("Comments").
 		Order("created_at desc").
 		Limit(limit).
 		Offset(offset).
