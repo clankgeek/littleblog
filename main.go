@@ -673,6 +673,30 @@ func jsonify(v any) template.JS {
 	return template.JS(b)
 }
 
+func middlewareRenderTime() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Stocker le temps de début pour utilisation dans les handlers
+		c.Set("requestStart", time.Now())
+		c.Next()
+	}
+}
+
+func getRenderTime(c *gin.Context) any {
+	start, _ := c.Get("requestStart")
+	duration := time.Since(start.(time.Time))
+	return fmt.Sprintf("Page générée en %s", formatDuration(duration))
+}
+
+func formatDuration(d time.Duration) string {
+	if d < time.Millisecond {
+		return fmt.Sprintf("%.2fµs", float64(d.Nanoseconds())/1000)
+	}
+	if d < time.Second {
+		return fmt.Sprintf("%.2fms", float64(d.Nanoseconds())/1e6)
+	}
+	return fmt.Sprintf("%.2fs", d.Seconds())
+}
+
 func middlewareCORS(c *gin.Context) {
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -827,6 +851,9 @@ func setMiddleware(r *gin.Engine) {
 
 	// Configuration des sessions
 	r.Use(newMiddlewareSession())
+
+	// Calculate time elapsed
+	r.Use(middlewareRenderTime())
 
 	// CORS
 	r.Use(middlewareCORS)
@@ -996,6 +1023,7 @@ func indexHandler(c *gin.Context) {
 		"rsslink":         rsslink,
 		"BuildID":         BuildID,
 		"memories":        memories,
+		"renderTime":      getRenderTime(c),
 	})
 }
 
@@ -1044,6 +1072,7 @@ func postHandler(c *gin.Context) {
 		"version":         VERSION,
 		"menu":            GenerateMenu(configuration.Menu, post.Category),
 		"BuildID":         BuildID,
+		"renderTime":      getRenderTime(c),
 	})
 }
 
