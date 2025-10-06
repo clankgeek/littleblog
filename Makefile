@@ -1,8 +1,9 @@
 # Variables
 BINARY_NAME=littleblog
 BUILD_DIR=build
+BUILD_ID := $(shell date +%Y%m%d%H%M%S)
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS=-ldflags "-X main.Version=${VERSION} -s -w"
+LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildID=${BUILD_ID} -s -w"
 PLATFORMS=linux/386 linux/amd64 linux/arm linux/arm64 darwin/amd64 darwin/arm64 windows/386 windows/amd64
 
 # Debian package variables
@@ -123,15 +124,15 @@ uninstall:
 # Run the application in development mode
 dev: build
 	@echo "🏃 Running in development mode..."
-	sudo ./$(BUILD_DIR)/$(BINARY_NAME) -config proxy-config.yaml
+	sudo ./$(BUILD_DIR)/$(BINARY_NAME) -config littleblog.yaml
 
 # Run with custom config
 run: build
 	@echo "🏃 Running $(BINARY_NAME)..."
-	@if [ -f "proxy-config.yaml" ]; then \
-		sudo ./$(BUILD_DIR)/$(BINARY_NAME) -config proxy-config.yaml; \
+	@if [ -f "littleblog.yaml" ]; then \
+		./$(BUILD_DIR)/$(BINARY_NAME) -config littleblog.yaml; \
 	else \
-		echo "❌ Configuration file 'proxy-config.yaml' not found"; \
+		echo "❌ Configuration file 'littleblog.yaml' not found"; \
 		echo "💡 Run 'make example' to create one"; \
 		exit 1; \
 	fi
@@ -140,7 +141,7 @@ run: build
 example: build
 	@echo "📝 Creating example configuration..."
 	./$(BUILD_DIR)/$(BINARY_NAME) -example
-	@echo "✅ Example configuration created: proxy-config.yaml"
+	@echo "✅ Example configuration created: littleblog.yaml"
 	@echo "💡 Edit the file before running 'make run'"
 
 # Cross-compile for multiple platforms
@@ -197,8 +198,8 @@ deb: deps
 	@chmod +x $(DEB_DIR)/usr/local/bin/$(BINARY_NAME)
 	
 	# Create example config if exists
-	@if [ -f "proxy-config.yaml" ]; then \
-		cp proxy-config.yaml $(DEB_DIR)/etc/littleblog/proxy-config.yaml.example; \
+	@if [ -f "littleblog.yaml" ]; then \
+		cp littleblog.yaml $(DEB_DIR)/etc/littleblog/littleblog.yaml.example; \
 	fi
 	
 	# Create systemd service
@@ -210,7 +211,7 @@ deb: deps
 	@echo 'Type=simple' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
 	@echo 'User=root' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
 	@echo 'WorkingDirectory=/etc/littleblog' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'ExecStart=/usr/local/bin/littleblog -config /etc/littleblog/proxy-config.yaml' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
+	@echo 'ExecStart=/usr/local/bin/littleblog -config /etc/littleblog/littleblog.yaml' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
 	@echo 'Restart=always' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
 	@echo 'RestartSec=5' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
 	@echo 'StandardOutput=journal' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
@@ -235,7 +236,7 @@ deb: deps
 	@echo 'set -e' >> $(DEB_DIR)/DEBIAN/postinst
 	@echo 'systemctl daemon-reload' >> $(DEB_DIR)/DEBIAN/postinst
 	@echo 'echo "✅ littleblog installed successfully"' >> $(DEB_DIR)/DEBIAN/postinst
-	@echo 'echo "📝 Edit /etc/littleblog/proxy-config.yaml.example and rename it to proxy-config.yaml"' >> $(DEB_DIR)/DEBIAN/postinst
+	@echo 'echo "📝 Edit /etc/littleblog/littleblog.yaml.example and rename it to littleblog.yaml"' >> $(DEB_DIR)/DEBIAN/postinst
 	@echo 'echo "🚀 Then run: systemctl enable littleblog && systemctl start littleblog"' >> $(DEB_DIR)/DEBIAN/postinst
 	@chmod +x $(DEB_DIR)/DEBIAN/postinst
 	
@@ -271,7 +272,7 @@ setup: init deps example
 	@echo "🎉 Setup complete!"
 	@echo ""
 	@echo "Next steps:"
-	@echo "1. Edit proxy-config.yaml with your domains and backends"
+	@echo "1. Edit littleblog.yaml with your domains and backends"
 	@echo "2. Run 'make run' to start the proxy"
 	@echo "3. Or run 'make install' to install system-wide"
 
@@ -296,7 +297,7 @@ systemd: install
 	@echo 'Type=simple' >> /tmp/littleblog.service
 	@echo 'User=root' >> /tmp/littleblog.service
 	@echo 'WorkingDirectory=/opt/littleblog' >> /tmp/littleblog.service
-	@echo 'ExecStart=/usr/local/bin/littleblog -config /opt/littleblog/proxy-config.yaml' >> /tmp/littleblog.service
+	@echo 'ExecStart=/usr/local/bin/littleblog -config /opt/littleblog/littleblog.yaml' >> /tmp/littleblog.service
 	@echo 'Restart=always' >> /tmp/littleblog.service
 	@echo 'RestartSec=5' >> /tmp/littleblog.service
 	@echo 'StandardOutput=journal' >> /tmp/littleblog.service
@@ -306,7 +307,7 @@ systemd: install
 	@echo 'WantedBy=multi-user.target' >> /tmp/littleblog.service
 	sudo mv /tmp/littleblog.service /etc/systemd/system/
 	sudo mkdir -p /opt/littleblog
-	sudo cp proxy-config.yaml /opt/littleblog/ 2>/dev/null || true
+	sudo cp littleblog.yaml /opt/littleblog/ 2>/dev/null || true
 	sudo systemctl daemon-reload
 	@echo "✅ Systemd service created"
 	@echo "💡 Commands:"
@@ -347,7 +348,7 @@ help:
 	@echo "  make deb-clean      - Clean debian build artifacts"
 	@echo ""
 	@echo "🏃 Run Commands:"
-	@echo "  make run            - Build and run with proxy-config.yaml"
+	@echo "  make run            - Build and run with littleblog.yaml"
 	@echo "  make dev            - Build and run in development mode"
 	@echo "  make watch          - Auto-rebuild on file changes (requires entr)"
 	@echo "  make example        - Create example configuration"

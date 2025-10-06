@@ -6,10 +6,10 @@
     <style>
         {{.theme | safeCSS}}
     </style>
-    <link rel="stylesheet" href="/static/css/admin_header.css">
-    <link rel="stylesheet" href="/static/css/common.css">
-    <link rel="stylesheet" href="/static/css/footer.css">
-    <link rel="stylesheet" href="/static/css/admin_post.css">
+    <link rel="stylesheet" href="/static/css/admin_header.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/static/css/common.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/static/css/footer.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/static/css/admin_post.css?{{ .BuildID }}">
 </head>
 <body>
     {{ template "admin_header" . }}
@@ -18,7 +18,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "admin_post_form_scripts" . }}
-    <script src="static/js/common.js"></script>
+    <script src="static/js/common.js?{{ .BuildID }}"></script>
 </body>
 </html>
 {{ end }}

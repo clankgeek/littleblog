@@ -59,7 +59,6 @@ var (
 	theme         string
 	rsslink       template.HTML
 	BuildID       string
-	BuildTime     string
 )
 
 //go:embed templates/**/*.html
@@ -923,6 +922,10 @@ func parseCommandLineArgs() (configFile string, shouldCreateExample bool, versio
 }
 
 func main() {
+	if BuildID == "" {
+		BuildID = VERSION
+	}
+
 	initConfiguration()
 	initMarkdown()
 	initDatabase()
@@ -955,6 +958,7 @@ func indexHandler(c *gin.Context) {
 		"category":        category,
 		"menu":            GenerateMenu(configuration.Menu, category),
 		"rsslink":         rsslink,
+		"BuildID":         BuildID,
 	})
 }
 
@@ -969,6 +973,7 @@ func postHandler(c *gin.Context) {
 			"currentYear": time.Now().Year(),
 			"theme":       theme,
 			"version":     VERSION,
+			"BuildID":     BuildID,
 		})
 		return
 	}
@@ -983,6 +988,7 @@ func postHandler(c *gin.Context) {
 			"currentYear": time.Now().Year(),
 			"theme":       theme,
 			"version":     VERSION,
+			"BuildID":     BuildID,
 		})
 		return
 	}
@@ -1003,6 +1009,7 @@ func postHandler(c *gin.Context) {
 		"theme":           theme,
 		"version":         VERSION,
 		"menu":            GenerateMenu(configuration.Menu, post.Category),
+		"BuildID":         BuildID,
 	})
 }
 
@@ -1020,6 +1027,7 @@ func loginPageHandler(c *gin.Context) {
 		"siteName": configuration.SiteName,
 		"theme":    theme,
 		"version":  VERSION,
+		"BuildID":  BuildID,
 	})
 }
 
@@ -1092,6 +1100,7 @@ func adminDashboardHandler(c *gin.Context) {
 		"isAdmin":     true,
 		"theme":       theme,
 		"version":     VERSION,
+		"BuildID":     BuildID,
 	})
 }
 
@@ -1224,6 +1233,7 @@ func adminPostsHandler(c *gin.Context) {
 		"isAdmin":     true,
 		"theme":       theme,
 		"version":     VERSION,
+		"BuildID":     BuildID,
 	})
 }
 
@@ -1253,6 +1263,7 @@ func newPostPageHandler(c *gin.Context) {
 		"theme":           theme,
 		"version":         VERSION,
 		"optionsCategory": getOptionsCategory(),
+		"BuildID":         BuildID,
 	})
 }
 
@@ -1288,6 +1299,7 @@ func editPostPageHandler(c *gin.Context) {
 		"theme":           theme,
 		"version":         VERSION,
 		"optionsCategory": getOptionsCategory(),
+		"BuildID":         BuildID,
 	})
 }
 
