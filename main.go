@@ -13,6 +13,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"io/fs"
 	"log"
 	mrand "math/rand"
 	"net/http"
@@ -28,8 +29,12 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/tdewolff/minify/v2"
 
 	"github.com/andskur/argon2-hashing"
+	"github.com/tdewolff/minify/v2/css"
+	htmlmin "github.com/tdewolff/minify/v2/html"
+	"github.com/tdewolff/minify/v2/js"
 	"github.com/ulule/limiter/v3"
 	ginlimiter "github.com/ulule/limiter/v3/drivers/middleware/gin"
 	"github.com/ulule/limiter/v3/drivers/store/memory"
@@ -53,10 +58,16 @@ var (
 	configuration *Config
 	theme         string
 	rsslink       template.HTML
+	BuildID       string
+	BuildTime     string
 )
 
 //go:embed templates/**/*.html
 var templatesFS embed.FS
+
+//go:embed static/js
+//go:embed static/css
+var staticFS embed.FS
 
 // Models avec tags GORM
 type Post struct {
@@ -688,16 +699,70 @@ func newMiddlewareSession() gin.HandlerFunc {
 	return sessions.Sessions("littleblog", store)
 }
 
-func getTemplates() *template.Template {
-	// fonctions en go disponible depuis les templates
+// Middleware pour minifier les fichiers statiques CSS/JS
+func ServeMinifiedStatic(m *minify.M) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := strings.TrimPrefix(c.Request.URL.Path, "/static/")
+		content, err := fs.ReadFile(staticFS, "static/"+path)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		ext := filepath.Ext(path)
+		var contentType string
+		var minified []byte
+
+		switch ext {
+		case ".css":
+			contentType = "text/css"
+			minified, err = m.Bytes("text/css", content)
+		case ".js":
+			contentType = "application/javascript"
+			minified, err = m.Bytes("application/javascript", content)
+		default:
+			c.Data(http.StatusOK, "application/octet-stream", content)
+			return
+		}
+
+		if err != nil {
+			minified = content
+		}
+
+		c.Data(http.StatusOK, contentType, minified)
+	}
+}
+
+func getTemplates(production bool) *template.Template {
+	m := minify.New()
+
+	if production {
+		m.AddFunc("text/html", htmlmin.Minify)
+	}
+
 	tmpl := template.New("").Funcs(template.FuncMap{
 		"safeCSS":  safeCSS,
 		"escapeJS": escapeJS,
 		"jsonify":  jsonify,
 	})
 
-	// parser les templates
-	return template.Must(tmpl.ParseFS(templatesFS, "templates/**/*.html"))
+	// Lire tous les fichiers HTML
+	fs.WalkDir(templatesFS, "templates", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".html" {
+			return err
+		}
+
+		content, _ := fs.ReadFile(templatesFS, path)
+		minified, err := m.Bytes("text/html", content)
+		if err != nil {
+			minified = content
+		}
+
+		tmpl.New(path).Parse(string(minified))
+		return nil
+	})
+
+	return tmpl
 }
 
 func initConfiguration() {
@@ -750,7 +815,7 @@ func newServer() *gin.Engine {
 	r := gin.Default()
 
 	// parser les templates
-	r.SetHTMLTemplate(getTemplates())
+	r.SetHTMLTemplate(getTemplates(configuration.Production))
 
 	return r
 }
@@ -772,11 +837,17 @@ func slugify(s string) string {
 }
 
 func setRoutes(r *gin.Engine) {
+	m := minify.New()
+	m.AddFunc("text/css", css.Minify)
+	m.AddFunc("application/javascript", js.Minify)
+
 	// middleware rate limiter
 	middlewareLimiter := newMiddlewareLimiter()
 
-	// Route statique
-	r.Static("/static", "./static")
+	// Route statiques
+	r.Static("/static/uploads", "./static/uploads")
+	r.GET("/static/css/*.css", ServeMinifiedStatic(m))
+	r.GET("/static/js/*.js", ServeMinifiedStatic(m))
 
 	// Routes publiques
 	r.GET("/", indexHandler)

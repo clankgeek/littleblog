@@ -1,4 +1,3 @@
-{{ define "common_footer_styles" }}
 .footer {
     background: var(--dark-color);
     color: white;
@@ -42,4 +41,3 @@
         text-align: center;
     }
 }
-{{ end }}

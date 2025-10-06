@@ -1,4 +1,3 @@
-{{ define "public_header_styles" }}
 .header {
     background: white;
     border-bottom: 1px solid var(--border-color);
@@ -125,4 +124,3 @@
     font-size: 0.9em;
     color: #666;
 }
-{{ end }}

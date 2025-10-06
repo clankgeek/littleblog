@@ -1,5 +1,3 @@
-{{ define "cookie_scripts" }}
-<script>
 function closeCookieNotice() {
 	const nowDate = new Date();
 	const expireDate = new Date(nowDate.setDate(nowDate.getDate() + 30)).toUTCString();
@@ -12,5 +10,3 @@ document.addEventListener("DOMContentLoaded", function() {
 		document.getElementById("cookie-notice").style.display = "block";
 	}
 });
-</script>
-{{ end }}

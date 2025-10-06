@@ -1,6 +1,3 @@
-{{ define "common_styles" }}
-{{.theme | safeCSS}}
-
 /* Reset et base */
 * {
     margin: 0;
@@ -125,4 +122,3 @@ body {
         font-size: 0.9em;
     }
 }
-{{ end }}

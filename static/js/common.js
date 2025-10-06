@@ -1,5 +1,3 @@
-{{ define "common_scripts" }}
-<script>
 // Scripts globaux
 document.addEventListener('alpine:init', () => {
     // Recherche globale
@@ -87,5 +85,3 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
-</script>
-{{ end }}

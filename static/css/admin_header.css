@@ -1,4 +1,3 @@
-{{ define "admin_header_styles" }}
 .admin-header {
     background: white;
     border-bottom: 1px solid var(--border-color);
@@ -99,4 +98,3 @@
         font-size: 0.9em;
     }
 }
-{{ end }}
