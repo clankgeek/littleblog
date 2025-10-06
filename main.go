@@ -704,7 +704,7 @@ func ServeMinifiedStatic(m *minify.M) gin.HandlerFunc {
 		path := strings.TrimPrefix(c.Request.URL.Path, "/static/")
 		content, err := fs.ReadFile(staticFS, "static/"+path)
 		if err != nil {
-			c.Status(http.StatusNotFound)
+			pageNotFound(c, "Fichier non trouvé")
 			return
 		}
 
@@ -843,8 +843,13 @@ func setRoutes(r *gin.Engine) {
 	// middleware rate limiter
 	middlewareLimiter := newMiddlewareLimiter()
 
+	//default
+	r.NoRoute(func(c *gin.Context) {
+		pageNotFound(c, "Page non trouvée")
+	})
+
 	// Route statiques
-	r.Static("/static/uploads", "./static/uploads")
+	r.Static("/static/img", "./static/img")
 	r.GET("/static/css/*.css", ServeMinifiedStatic(m))
 	r.GET("/static/js/*.js", ServeMinifiedStatic(m))
 
@@ -962,34 +967,31 @@ func indexHandler(c *gin.Context) {
 	})
 }
 
+func pageNotFound(c *gin.Context, title string) {
+	c.HTML(http.StatusNotFound, "404_not_found", gin.H{
+		"title":       title,
+		"siteName":    configuration.SiteName,
+		"description": "La page que vous recherchez n'existe pas.",
+		"currentYear": time.Now().Year(),
+		"theme":       theme,
+		"version":     VERSION,
+		"BuildID":     BuildID,
+		"menu":        GenerateMenu(configuration.Menu, ""),
+	})
+}
+
 func postHandler(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.HTML(http.StatusNotFound, "404_not_found", gin.H{
-			"title":       "Page non trouvée",
-			"siteName":    configuration.SiteName,
-			"description": "La page que vous recherchez n'existe pas.",
-			"currentYear": time.Now().Year(),
-			"theme":       theme,
-			"version":     VERSION,
-			"BuildID":     BuildID,
-		})
+		pageNotFound(c, "Page non trouvée")
 		return
 	}
 
 	var post Post
 	result := db.First(&post, uint(id))
 	if result.Error != nil {
-		c.HTML(http.StatusNotFound, "404_not_found", gin.H{
-			"title":       "Article non trouvé",
-			"siteName":    configuration.SiteName,
-			"description": "L'article que vous recherchez n'existe pas.",
-			"currentYear": time.Now().Year(),
-			"theme":       theme,
-			"version":     VERSION,
-			"BuildID":     BuildID,
-		})
+		pageNotFound(c, "Article non trouvé")
 		return
 	}
 
@@ -1146,7 +1148,7 @@ func uploadImageHandler(c *gin.Context) {
 	processedImg := resizeImage(img, 1600)
 
 	// Créer le dossier uploads s'il n'existe pas
-	uploadsDir := "./static/uploads"
+	uploadsDir := "./static/img/uploads"
 	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur création dossier"})
 		return
@@ -1205,7 +1207,7 @@ func uploadImageHandler(c *gin.Context) {
 	finalSize := fileInfo.Size()
 
 	// Retourner l'URL de l'image
-	imageURL := fmt.Sprintf("/static/uploads/%s", filename)
+	imageURL := fmt.Sprintf("/static/img/uploads/%s", filename)
 	c.JSON(http.StatusOK, gin.H{
 		"url":      imageURL,
 		"filename": filename,
