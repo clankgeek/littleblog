@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"embed"
 	"encoding/json"
 	"encoding/xml"
@@ -20,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -64,8 +66,9 @@ var (
 //go:embed templates/**/*.html
 var templatesFS embed.FS
 
-//go:embed static/js
-//go:embed static/css
+//go:embed ressources/js
+//go:embed ressources/css
+//go:embed ressources/img
 var staticFS embed.FS
 
 // Models avec tags GORM
@@ -258,7 +261,10 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 	}
 
 	theme = GenerateThemeCSS(conf.Theme)
-	rsslink = GenerateDynamicRSS(conf)
+	rsslink, err = GenerateDynamicRSS(conf)
+	if err != nil {
+		return nil, err
+	}
 
 	return conf, nil
 }
@@ -544,13 +550,16 @@ func GenerateMenu(items []MenuItem, category string) template.HTML {
 	return safeHtml(menuStr)
 }
 
-func GenerateDynamicRSS(conf *Config) template.HTML {
+func GenerateDynamicRSS(conf *Config) (template.HTML, error) {
 	rssStr := ""
 	for _, item := range conf.Menu {
 		slugifiedKey := slugify(item.Key)
+		if slugifiedKey == "files" || slugifiedKey == "static" {
+			return "", fmt.Errorf("la clé du menu doit etre différente de 'files' et de 'static'")
+		}
 		rssStr += fmt.Sprintf("<link rel=\"alternate\" type=\"application/rss+xml\" title=\"%s - %s\" href=\"/rss.xml/%s\"/>\n", conf.SiteName, slugifiedKey, slugifiedKey)
 	}
-	return safeHtml(rssStr)
+	return safeHtml(rssStr), nil
 }
 
 // GenerateThemeCSS génère le CSS pour un thème basé sur une couleur
@@ -701,8 +710,8 @@ func newMiddlewareSession() gin.HandlerFunc {
 // Middleware pour minifier les fichiers statiques CSS/JS
 func ServeMinifiedStatic(m *minify.M) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		path := strings.TrimPrefix(c.Request.URL.Path, "/static/")
-		content, err := fs.ReadFile(staticFS, "static/"+path)
+		path := strings.TrimPrefix(c.Request.URL.Path, "/files/")
+		content, err := fs.ReadFile(staticFS, "ressources/"+path)
 		if err != nil {
 			pageNotFound(c, "Fichier non trouvé")
 			return
@@ -719,6 +728,12 @@ func ServeMinifiedStatic(m *minify.M) gin.HandlerFunc {
 		case ".js":
 			contentType = "application/javascript"
 			minified, err = m.Bytes("application/javascript", content)
+		case ".svg":
+			// En-têtes de cache pour SVG
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			c.Header("ETag", generateETag(content))
+			c.Data(http.StatusOK, "image/svg+xml", content)
+			return
 		default:
 			c.Data(http.StatusOK, "application/octet-stream", content)
 			return
@@ -728,8 +743,18 @@ func ServeMinifiedStatic(m *minify.M) gin.HandlerFunc {
 			minified = content
 		}
 
+		// En-têtes de cache pour CSS et JS
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		c.Header("ETag", generateETag(minified))
+
 		c.Data(http.StatusOK, contentType, minified)
 	}
+}
+
+// Fonction helper pour générer un ETag
+func generateETag(content []byte) string {
+	hash := sha256.Sum256(content)
+	return fmt.Sprintf(`"%x"`, hash[:16])
 }
 
 func getTemplates(production bool) *template.Template {
@@ -849,9 +874,10 @@ func setRoutes(r *gin.Engine) {
 	})
 
 	// Route statiques
-	r.Static("/static/img", "./static/img")
-	r.GET("/static/css/*.css", ServeMinifiedStatic(m))
-	r.GET("/static/js/*.js", ServeMinifiedStatic(m))
+	r.Static("/static/", "./static")
+	r.GET("/files/css/*.css", ServeMinifiedStatic(m))
+	r.GET("/files/js/*.js", ServeMinifiedStatic(m))
+	r.GET("/files/img/*.svg", ServeMinifiedStatic(m))
 
 	// Routes publiques
 	r.GET("/", indexHandler)
@@ -949,6 +975,11 @@ func indexHandler(c *gin.Context) {
 	session := sessions.Default(c)
 	isAdmin := session.Get("user_id") != nil
 	category := slugify(c.Param("category"))
+	memories := ""
+
+	if isAdmin {
+		memories = getMemUsage()
+	}
 
 	c.HTML(http.StatusOK, "index", gin.H{
 		"title":           configuration.SiteName,
@@ -964,6 +995,7 @@ func indexHandler(c *gin.Context) {
 		"menu":            GenerateMenu(configuration.Menu, category),
 		"rsslink":         rsslink,
 		"BuildID":         BuildID,
+		"memories":        memories,
 	})
 }
 
@@ -1103,7 +1135,14 @@ func adminDashboardHandler(c *gin.Context) {
 		"theme":       theme,
 		"version":     VERSION,
 		"BuildID":     BuildID,
+		"memories":    getMemUsage(),
 	})
+}
+
+func getMemUsage() string {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return fmt.Sprintf("Statistiques mémoire: allouée = %v Mo, total allouée = %d, système = %v Mo, nombre de GC = %v\n", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 }
 
 func uploadImageHandler(c *gin.Context) {
@@ -1148,7 +1187,7 @@ func uploadImageHandler(c *gin.Context) {
 	processedImg := resizeImage(img, 1600)
 
 	// Créer le dossier uploads s'il n'existe pas
-	uploadsDir := "./static/img/uploads"
+	uploadsDir := "./static/uploads"
 	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur création dossier"})
 		return
@@ -1207,7 +1246,7 @@ func uploadImageHandler(c *gin.Context) {
 	finalSize := fileInfo.Size()
 
 	// Retourner l'URL de l'image
-	imageURL := fmt.Sprintf("/static/img/uploads/%s", filename)
+	imageURL := fmt.Sprintf("/static/uploads/%s", filename)
 	c.JSON(http.StatusOK, gin.H{
 		"url":      imageURL,
 		"filename": filename,
@@ -1236,6 +1275,7 @@ func adminPostsHandler(c *gin.Context) {
 		"theme":       theme,
 		"version":     VERSION,
 		"BuildID":     BuildID,
+		"memories":    getMemUsage(),
 	})
 }
 
@@ -1266,6 +1306,7 @@ func newPostPageHandler(c *gin.Context) {
 		"version":         VERSION,
 		"optionsCategory": getOptionsCategory(),
 		"BuildID":         BuildID,
+		"memories":        getMemUsage(),
 	})
 }
 
@@ -1302,6 +1343,7 @@ func editPostPageHandler(c *gin.Context) {
 		"version":         VERSION,
 		"optionsCategory": getOptionsCategory(),
 		"BuildID":         BuildID,
+		"memories":        getMemUsage(),
 	})
 }
 

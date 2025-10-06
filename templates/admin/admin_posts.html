@@ -6,10 +6,10 @@
     <style>
         {{.theme | safeCSS}}
     </style>
-    <link rel="stylesheet" href="/static/css/admin_header.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/common.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/footer.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/admin_posts.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/admin_header.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/common.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/footer.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/admin_posts.css?{{ .BuildID }}">
 </head>
 <body>
     {{ template "admin_header" . }}
@@ -18,16 +18,16 @@
     </main>
     {{ template "footer" . }}
     {{ template "admin_posts_scripts" . }}
-    <script src="static/js/common.js?{{ .BuildID }}"></script>
+    <script src="/files/js/common.js?{{ .BuildID }}"></script>
 </body>
 </html>
 {{ end }}
 {{ define "admin_posts_content" }}
 <div class="container">
     <div class="page-header">
-        <h1 class="page-title">📚 Gestion des Articles</h1>
+        <h1 class="page-title"><img src="/files/img/books.svg" class="icon"> Gestion des Articles</h1>
         <a href="/admin/posts/new" class="btn btn-success">
-            ➕ Nouvel Article
+            <img src="/files/img/plus.svg" class="icon"> Nouvel Article
         </a>
     </div>
 
@@ -36,7 +36,7 @@
         <div class="posts-container">
             <div class="posts-header">
                 <div class="posts-count">
-                    📊 <strong>{{ len .posts }}</strong> article{{ if gt (len .posts) 1 }}s{{ end }} total{{ if gt (len .posts) 1 }}aux{{ end }}
+                    <img src="/files/img/stats.svg" class="icon"> <strong>{{ len .posts }}</strong> article{{ if gt (len .posts) 1 }}s{{ end }} total{{ if gt (len .posts) 1 }}aux{{ end }}
                 </div>
                 <div style="font-size: 0.9em; color: #666;">
                     Dernière mise à jour il y a quelques instants
@@ -47,12 +47,12 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th style="width: 40%;">📝 Article</th>
-                            <th style="width: 15%;">👤 Auteur</th>
-                            <th style="width: 15%;">📅 Date</th>
-                            <th style="width: 15%;">🏷️ Tags</th>
-                            <th style="width: 10%;">📊 Stats</th>
-                            <th style="width: 25%;">⚙️ Actions</th>
+                            <th style="width: 40%;"><img src="/files/img/memo.svg" class="icon"> Article</th>
+                            <th style="width: 15%;"><img src="/files/img/bust.svg" class="icon"> Auteur</th>
+                            <th style="width: 15%;"><img src="/files/img/calendar.svg" class="icon"> Date</th>
+                            <th style="width: 15%;"><img src="/files/img/label.svg" class="icon"> Tags</th>
+                            <th style="width: 10%;"><img src="/files/img/stats.svg" class="icon"> Stats</th>
+                            <th style="width: 25%;"><img src="/files/img/gear.svg" class="icon"> Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -78,19 +78,19 @@
                             </td>
                             <td>
                                 <div class="stats-cell">
-                                    <div class="stat">❤️ {{ .LikeCount }}</div>
-                                    <div class="stat">💬 {{ len .Comments }}</div>
+                                    <div class="stat"><img src="/files/img/redheart.svg" class="icon"> {{ .LikeCount }}</div>
+                                    <div class="stat"><img src="/files/img/ballon.svg" class="icon"> {{ len .Comments }}</div>
                                 </div>
                             </td>
                             <td>
                                 <div class="actions">
                                     <a href="/post/{{ .ID }}" class="btn btn-primary btn-sm" target="_blank" title="Voir l'article">
-                                        👁️
+                                        <img src="/files/img/eye.svg" class="icon">
                                     </a>
                                     <a href="/admin/posts/{{ .ID }}/edit" class="btn btn-warning btn-sm" title="Éditer">
-                                        ✏️
+                                        <img src="/files/img/pencil.svg" class="icon">
                                     </a>
-                                    <button @click="confirmDelete({{ .ID }}, '{{ .Title | escapeJS}}')" class="btn btn-danger btn-sm" title="Supprimer">🗑️</button>
+                                    <button @click="confirmDelete({{ .ID }}, '{{ .Title | escapeJS}}')" class="btn btn-danger btn-sm" title="Supprimer"><img src="/files/img/waste.svg" class="icon"></button>
                                 </div>
                             </td>
                         </tr>
@@ -102,11 +102,11 @@
         {{- else }}
         <div class="posts-container">
             <div class="empty-state">
-                <div class="empty-icon">📝</div>
+                <div class="empty-icon"><img src="/files/img/memo.svg" class="icon"></div>
                 <h3 class="empty-title">Aucun article pour le moment</h3>
                 <p class="empty-description">Commencez par créer votre premier article pour partager vos idées !</p>
                 <a href="/admin/posts/new" class="btn btn-success btn-lg">
-                    ➕ Créer le premier article
+                    <img src="/files/img/plus.svg" class="icon"> Créer le premier article
                 </a>
             </div>
         </div>
@@ -123,25 +123,25 @@
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform scale-95"
                  x-transition:enter-end="opacity-100 transform scale-100">
-                <div class="modal-icon">🗑️</div>
+                <div class="modal-icon"><img src="/files/img/waste.svg" class="icon"></div>
                 <h3 class="modal-title">Confirmer la suppression</h3>
                 <div class="modal-content">
                     <p>Êtes-vous absolument sûr de vouloir supprimer cet article ?</p>
                     <div class="modal-target" x-text="deleteTarget.title"></div>
                     <div class="modal-warning">
-                        ⚠️ Cette action est <strong>irréversible</strong> !<br>
+                        <img src="/files/img/warning.svg" class="icon"> Cette action est <strong>irréversible</strong> !<br>
                         Tous les commentaires et likes seront également supprimés.
                     </div>
                 </div>
                 <div class="modal-actions">
                     <button @click="showDeleteModal = false" class="btn btn-primary">
-                        ❌ Annuler
+                        <img src="/files/img/cross.svg" class="icon"> Annuler
                     </button>
                     <button @click="deletePost" 
                             :disabled="deleting" 
                             class="btn btn-danger">
-                        <span x-show="!deleting">🗑️ Supprimer définitivement</span>
-                        <span x-show="deleting">⏳ Suppression...</span>
+                        <span x-show="!deleting"><img src="/files/img/waste.svg" class="icon"> Supprimer définitivement</span>
+                        <span x-show="deleting"><img src="/files/img/hourglass.svg" class="icon"> Suppression...</span>
                     </button>
                 </div>
             </div>

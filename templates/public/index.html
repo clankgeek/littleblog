@@ -6,11 +6,11 @@
     <style>
         {{.theme | safeCSS}}
     </style>
-    <link rel="stylesheet" href="/static/css/header.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/common.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/cookie.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/footer.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/index.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/header.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/common.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/cookie.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/footer.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/index.css?{{ .BuildID }}">
 </head>
 <body>
     {{ template "public_header" . }}
@@ -18,8 +18,8 @@
     <main class="main">
         {{ template "index_content" . }}
     </main>
-    <script src="static/js/cookie.js?{{ .BuildID }}"></script> 
-    <script src="static/js/common.js?{{ .BuildID }}"></script>
+    <script src="/files/js/cookie.js?{{ .BuildID }}"></script> 
+    <script src="/files/js/common.js?{{ .BuildID }}"></script>
     {{ template "footer" . }}
     {{ template "index_scripts" . }}
 </body>
@@ -47,12 +47,12 @@
 
         <!-- Message quand il n'y a plus d'articles -->
         <div class="no-more-posts" x-show="!hasMore && !loading && posts.length > 0" x-cloak>
-            <p>🎉 Vous avez tout lu !</p>
+            <p><img src="/files/img/party_favor.svg" class="icon"> Vous avez tout lu !</p>
         </div>
 
         <!-- État vide -->
         <div class="empty-state" x-show="posts.length === 0 && !loading" x-cloak>
-            <div class="empty-icon">📝</div>
+            <div class="empty-icon"><img src="/files/img/memo.svg" class="icon"></div>
             <h3>Aucun article pour le moment</h3>
             <p>Restez connectés, du contenu arrive bientôt !</p>
         </div>
@@ -71,11 +71,11 @@
             </h3>
             <div class="article-meta">
                 <div class="meta-item">
-                    <span>👤</span>
+                    <span><img src="/files/img/bust.svg" class="icon"></span>
                     <span data-author></span>
                 </div>
                 <div class="meta-item">
-                    <span>📅</span>
+                    <span><img src="/files/img/calendar.svg" class="icon"></span>
                     <span data-date></span>
                 </div>
             </div>
@@ -92,18 +92,18 @@
                 </a>
                 <div class="article-stats">
                     <div class="stat">
-                        <span>❤️</span>
+                        <span><img src="/files/img/redheart.svg" class="icon"></span>
                         <span data-likes>0</span>
                     </div>
                     <div class="stat">
-                        <span>💬</span>
+                        <span><img src="/files/img/ballon.svg" class="icon"></span>
                         <span data-comments>0</span>
                     </div>
                 </div>
             </div>
 
             <div class="admin-actions" data-admin style="display: none;">
-                <a href="" class="btn-admin" data-edit>✏️ Éditer</a>
+                <a href="" class="btn-admin" data-edit><img src="/files/img/pencil.svg" class="icon"> Éditer</a>
             </div>
         </div>
     </article>

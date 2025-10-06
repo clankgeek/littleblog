@@ -2,28 +2,29 @@
 <div class="admin-header">
     <div class="container">
         <nav class="admin-nav">
-            <h1 class="admin-title">{{ if .pageIcon }}{{ .pageIcon }} {{ end }}{{ if .pageTitle }}{{ .pageTitle }}{{ else }}🔐 Administration{{ end }}</h1>
+            <h1 class="admin-title">{{ if .pageIcon }}{{ .pageIcon }} {{ end }}{{ if .pageTitle }}{{ .pageTitle }}{{ else }}<img src="/files/img/locked.svg" class="icon"> Administration{{ end }}</h1>
             <div class="admin-user">
                 <div class="nav-links">
                     <a href="/admin" class="nav-link {{ if eq .currentPage "dashboard" }}active{{ end }}">
-                        🏠 Dashboard
+                        <img src="/files/img/house.svg" class="icon"> Dashboard
                     </a>
                     <a href="/admin/posts" class="nav-link {{ if eq .currentPage "posts" }}active{{ end }}">
-                        📝 Articles
+                        <img src="/files/img/memo.svg" class="icon"> Articles
                     </a>
                     <a href="/admin/posts/new" class="nav-link {{ if eq .currentPage "new_post" }}active{{ end }}">
-                        ➕ Nouveau
+                        <img src="/files/img/plus.svg" class="icon"> Nouveau
                     </a>
                     <a href="/" class="nav-link" target="_blank">
-                        👁️ Voir le site
+                        <img src="/files/img/eye.svg" class="icon"> Voir le site
                     </a>
                 </div>
                 <div class="admin-user-info">
-                    <span class="username">👤 {{ if .username }}{{ .username }}{{ else }}Admin{{ end }}</span>
-                    <button onclick="logout()" class="btn btn-danger btn-sm">🚪 Déconnexion</button>
+                    <span class="username"><img src="/files/img/bust.svg" class="icon"> {{ if .username }}{{ .username }}{{ else }}Admin{{ end }}</span>
+                    <button onclick="logout()" class="btn btn-danger btn-sm"><img src="/files/img/door.svg" class="icon"> Déconnexion</button>
                 </div>
             </div>
         </nav>
+        <span class="username">{{ .memories }}</span>
     </div>
 </div>
 {{ end }}

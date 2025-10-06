@@ -2,7 +2,7 @@
 <div class="header">
     <div class="container">
         <nav class="nav">
-            <a href="/" class="logo">{{ .siteName }}</a> {{ .description }}
+            <a href="/" class="logo">{{ .siteName }} <i style="font-size: 0.5em;">{{ .description }}</i></a>
             <div class="nav-actions">
                 {{ if .showSearch }}
                 <div x-data="searchComponent" class="search-container">
@@ -25,13 +25,14 @@
                 {{ end }}
                 
                 {{ if .isAuthenticated }}
-                <a href="/admin" class="btn btn-primary btn-sm">🔐 Administration</a>
+                <a href="/admin" class="btn btn-primary btn-sm"><img src="/files/img/locked.svg" class="icon"> Administration</a>
                 {{ end }}
             </div>
         </nav>
         <div class="nav-links">
             {{ .menu }}
         </div>
+        <span class="username">{{ .memories }}</span>
     </div>
 </div>
 {{ end }}

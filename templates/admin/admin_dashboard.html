@@ -6,10 +6,10 @@
     <style>
         {{.theme | safeCSS}}
     </style>
-    <link rel="stylesheet" href="/static/css/admin_header.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/common.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/footer.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/admin_dashboard.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/admin_header.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/common.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/footer.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/admin_dashboard.css?{{ .BuildID }}">
 </head>
 <body>
     {{ template "admin_header" . }}
@@ -18,7 +18,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "admin_dashboard_scripts" . }}
-    <script src="static/js/common.js?{{ .BuildID }}"></script>
+    <script src="/files/js/common.js?{{ .BuildID }}"></script>
 </body>
 </html>
 {{ end }}
@@ -27,22 +27,22 @@
     <!-- Statistiques -->
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-icon">📝</div>
+            <div class="stat-icon"><img src="/files/img/memo.svg" class="icon"></div>
             <div class="stat-number">{{ .stats.TotalPosts }}</div>
             <div class="stat-label">Articles publiés</div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon">💬</div>
+            <div class="stat-icon"><img src="/files/img/ballon.svg" class="icon"></div>
             <div class="stat-number">{{ .stats.TotalComments }}</div>
             <div class="stat-label">Commentaires</div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon">❤️</div>
+            <div class="stat-icon"><img src="/files/img/redheart.svg" class="icon"></div>
             <div class="stat-number">{{ .stats.TotalLikes }}</div>
             <div class="stat-label">Likes totaux</div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon">📊</div>
+            <div class="stat-icon"><img src="/files/img/stats.svg" class="icon"></div>
             <div class="stat-number">{{ len .stats.RecentPosts }}</div>
             <div class="stat-label">Articles récents</div>
         </div>
@@ -56,17 +56,17 @@
         <div class="section-content">
             <div class="actions-grid">
                 <a href="/admin/posts/new" class="action-card">
-                    <div class="action-icon">➕</div>
+                    <div class="action-icon"><img src="/files/img/plus.svg" class="icon"></div>
                     <div class="action-title">Nouvel Article</div>
                     <div class="action-description">Créer un nouveau contenu</div>
                 </a>
                 <a href="/admin/posts" class="action-card">
-                    <div class="action-icon">📝</div>
+                    <div class="action-icon"><img src="/files/img/memo.svg" class="icon"></div>
                     <div class="action-title">Gérer Articles</div>
                     <div class="action-description">Éditer et organiser</div>
                 </a>
                 <a href="/" target="_blank" class="action-card">
-                    <div class="action-icon">👁️</div>
+                    <div class="action-icon"><img src="/files/img/eye.svg" class="icon"></div>
                     <div class="action-title">Voir le Site</div>
                     <div class="action-description">Aperçu public</div>
                 </a>
@@ -77,7 +77,7 @@
     <!-- Articles récents -->
     <div class="section">
         <div class="section-header">
-            <h2 class="section-title">📚 Articles récents</h2>
+            <h2 class="section-title"><img src="/files/img/books.svg" class="icon"> Articles récents</h2>
             <a href="/admin/posts" class="btn btn-primary btn-sm">Voir tous</a>
         </div>
         <div class="section-content">
@@ -87,26 +87,26 @@
                 <div class="post-info">
                     <h4>{{ .Title }}</h4>
                     <div class="post-meta">
-                        <span>👤 {{ .Author }}</span>
-                        <span>📅 {{ .CreatedAt.Format "02/01/2006 à 15:04" }}</span>
-                        <span>❤️ {{ .LikeCount }} likes</span>
-                        <span>💬 {{ len .Comments }} commentaires</span>
+                        <span><img src="/files/img/bust.svg" class="icon"> {{ .Author }}</span>
+                        <span><img src="/files/img/calendar.svg" class="icon"> {{ .CreatedAt.Format "02/01/2006 à 15:04" }}</span>
+                        <span><img src="/files/img/redheart.svg" class="icon"> {{ .LikeCount }} likes</span>
+                        <span><img src="/files/img/ballon.svg" class="icon"> {{ len .Comments }} commentaires</span>
                     </div>
                 </div>
                 <div class="post-actions">
-                    <a href="/post/{{ .ID }}" target="_blank" class="btn btn-primary btn-sm">👁️ Voir</a>
-                    <a href="/admin/posts/{{ .ID }}/edit" class="btn btn-warning btn-sm">✏️ Éditer</a>
+                    <a href="/post/{{ .ID }}" target="_blank" class="btn btn-primary btn-sm"><img src="/files/img/eye.svg" class="icon"> Voir</a>
+                    <a href="/admin/posts/{{ .ID }}/edit" class="btn btn-warning btn-sm"><img src="/files/img/pencil.svg" class="icon"> Éditer</a>
                 </div>
             </div>
             {{- end }}
             {{- else }}
             <div class="empty-state">
-                <div class="empty-icon">📝</div>
+                <div class="empty-icon"><img src="/files/img/memo.svg" class="icon"></div>
                 <h3>Aucun article pour le moment</h3>
                 <p>Commencez par créer votre premier article !</p>
                 <br>
                 <a href="/admin/posts/new" class="btn btn-success">
-                    ➕ Créer le premier article
+                    <img src="/files/img/plus.svg" class="icon"> Créer le premier article
                 </a>
             </div>
             {{- end }}

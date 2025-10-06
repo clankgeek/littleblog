@@ -6,11 +6,11 @@
     <style>
         {{.theme | safeCSS}}
     </style>
-    <link rel="stylesheet" href="/static/css/header.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/common.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/cookie.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/footer.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/404.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/header.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/common.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/cookie.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/footer.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/404.css?{{ .BuildID }}">
 </head>
 <body>
     {{ template "public_header" . }}
@@ -19,7 +19,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "404_scripts" . }}
-    <script src="static/js/common.js?{{ .BuildID }}"></script>
+    <script src="/files/js/common.js?{{ .BuildID }}"></script>
 </body>
 </html>
 {{ end }}
@@ -33,7 +33,7 @@
 <div class="container">
     <div class="error-container" x-data="errorPage">
         <div class="error-code">404</div>
-        <h1 class="error-title">🤔 {{ .title }}</h1>
+        <h1 class="error-title"><img src="/files/img/thinking.svg" class="icon"> {{ .title }}</h1>
         <p class="error-message">
             Oops ! La page que vous recherchez semble avoir disparu dans les méandres du web.<br>
             Elle a peut-être été déplacée, supprimée, ou vous avez tapé une URL incorrecte.
@@ -66,19 +66,19 @@
             <!-- Actions -->
             <div class="btn-group">
                 <a href="/" class="btn btn-primary">
-                    🏠 Retour à l'accueil
+                    <img src="/files/img/house.svg" class="icon"> Retour à l'accueil
                 </a>
                 <a href="javascript:history.back()" class="btn">
                     ← Page précédente
                 </a>
                 <a href="/#articles" class="btn">
-                    📚 Voir tous les articles
+                    <img src="/files/img/books.svg" class="icon"> Voir tous les articles
                 </a>
             </div>
 
             <!-- Suggestions -->
             <div style="margin-top: 30px;">
-                <p style="opacity: 0.8; margin-bottom: 15px;">💡 Que diriez-vous de :</p>
+                <p style="opacity: 0.8; margin-bottom: 15px;"><img src="/files/img/bulb.svg" class="icon"> Que diriez-vous de :</p>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
                     <a href="/" class="btn" style="font-size: 0.9em; padding: 8px 16px;">
                         Découvrir le blog

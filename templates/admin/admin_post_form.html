@@ -6,10 +6,10 @@
     <style>
         {{.theme | safeCSS}}
     </style>
-    <link rel="stylesheet" href="/static/css/admin_header.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/common.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/footer.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/admin_post.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/admin_header.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/common.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/footer.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/admin_post.css?{{ .BuildID }}">
 </head>
 <body>
     {{ template "admin_header" . }}
@@ -18,18 +18,18 @@
     </main>
     {{ template "footer" . }}
     {{ template "admin_post_form_scripts" . }}
-    <script src="static/js/common.js?{{ .BuildID }}"></script>
+    <script src="/files/js/common.js?{{ .BuildID }}"></script>
 </body>
 </html>
 {{ end }}
 {{ define "admin_post_form_content" }}
 <div class="container" x-data="postForm">
     <div class="page-header">
-        <h1 class="page-title">{{ if .isEdit }}✏️ Éditer l'article{{ else }}➕ Créer un nouvel article{{ end }}</h1>
+        <h1 class="page-title">{{ if .isEdit }}<img src="/files/img/pencil.svg" class="icon"> Éditer l'article{{ else }}<img src="/files/img/plus.svg" class="icon"> Créer un nouvel article{{ end }}</h1>
         <div class="header-actions">
             <a href="/admin/posts" class="btn btn-primary">← Retour à la liste</a>
             {{ if .isEdit }}
-            <a href="/post/{{ .post.ID }}" target="_blank" class="btn btn-success">👁️ Voir l'article</a>
+            <a href="/post/{{ .post.ID }}" target="_blank" class="btn btn-success"><img src="/files/img/eye.svg" class="icon"> Voir l'article</a>
             {{ end }}
         </div>
     </div>
@@ -39,7 +39,7 @@
             <div class="form-main">
                 <!-- Titre -->
                 <div class="form-group">
-                    <label class="form-label" for="title">📝 Titre de l'article *</label>
+                    <label class="form-label" for="title"><img src="/files/img/memo.svg" class="icon"> Titre de l'article *</label>
                     <input x-model="post.title" 
                            id="title" 
                            type="text" 
@@ -51,7 +51,7 @@
 
                 <!-- Extrait -->
                 <div class="form-group">
-                    <label class="form-label" for="excerpt">📋 Résumé/Extrait</label>
+                    <label class="form-label" for="excerpt"><img src="/files/img/note.svg" class="icon"> Résumé/Extrait</label>
                     <textarea x-model="post.excerpt" 
                               id="excerpt" 
                               class="form-control"
@@ -62,7 +62,7 @@
 
                 <!-- Contenu -->
                 <div class="form-group">
-    <label class="form-label" for="content">📖 Contenu (Markdown) *</label>
+    <label class="form-label" for="content"><img src="/files/img/openbook.svg" class="icon"> Contenu (Markdown) *</label>
     
     <!-- Barre d'outils pour l'éditeur -->
     <div class="editor-toolbar">
@@ -76,14 +76,14 @@
             <code>&lt;/&gt;</code>
         </button>
         <button type="button" @click="insertLink" class="toolbar-btn" title="Lien">
-            🔗
+            <img src="/files/img/link.svg" class="icon">
         </button>
         <button type="button" @click="insertHeading" class="toolbar-btn" title="Titre">
             H
         </button>
         <div class="toolbar-separator"></div>
         <button type="button" @click="$refs.imageUpload.click()" class="toolbar-btn toolbar-btn-primary" title="Insérer une image">
-            📷 Image
+            <img src="/files/img/camera.svg" class="icon"> Image
         </button>
         <input type="file" 
                x-ref="imageUpload" 
@@ -110,7 +110,7 @@
     
     <div class="form-help">
         <strong>Support Markdown :</strong> **gras**, *italique*, `code`, [liens](url), images, listes, etc.
-        <br>Cliquez sur 📷 pour uploader une image (max 5MB).
+        <br>Cliquez sur <img src="/files/img/camera.svg" class="icon"> pour uploader une image (max 5MB).
     </div>
 </div>
             </div>
@@ -118,7 +118,7 @@
             <div class="form-sidebar">
                 <!-- Actions de sauvegarde -->
                 <div class="sidebar-card">
-                    <h3 class="sidebar-title">💾 Publication</h3>
+                    <h3 class="sidebar-title"><img src="/files/img/floppy.svg" class="icon"> Publication</h3>
                     
                     <div x-show="saveStatus" class="save-status" :class="saveStatus" x-text="saveMessage"></div>
                     
@@ -126,17 +126,17 @@
                         <button type="submit" 
                                 :disabled="saving || !post.title.trim() || !post.content.trim()" 
                                 class="btn btn-success">
-                            <span x-show="!saving">{{ if .isEdit }}💾 Mettre à jour{{ else }}🚀 Publier l'article{{ end }}</span>
-                            <span x-show="saving">⏳ Enregistrement...</span>
+                            <span x-show="!saving">{{ if .isEdit }}<img src="/files/img/floppy.svg" class="icon"> Mettre à jour{{ else }}<img src="/files/img/rocket.svg" class="icon"> Publier l'article{{ end }}</span>
+                            <span x-show="saving"><img src="/files/img/hourglass.svg" class="icon"> Enregistrement...</span>
                         </button>
                         
-                        <a href="/admin/posts" class="btn btn-primary">❌ Annuler</a>
+                        <a href="/admin/posts" class="btn btn-primary"><img src="/files/img/cross.svg" class="icon"> Annuler</a>
                         
                         {{ if .isEdit }}
                         <button type="button" 
                                 @click="confirmDelete" 
                                 class="btn btn-danger">
-                            🗑️ Supprimer l'article
+                            <img src="/files/img/waste.svg" class="icon"> Supprimer l'article
                         </button>
                         {{ end }}
                     </div>
@@ -145,7 +145,7 @@
                 <!-- Auteur -->
                 {{ if not .isEdit }}
                 <div class="sidebar-card">
-                    <h3 class="sidebar-title">👤 Auteur</h3>
+                    <h3 class="sidebar-title"><img src="/files/img/bust.svg" class="icon"> Auteur</h3>
                     <input x-model="post.author" 
                            type="text" 
                            class="form-control"
@@ -156,7 +156,7 @@
 
                 <!-- Category -->
                 <div class="sidebar-card">
-                    <h3 class="sidebar-title">🏷️ Catégorie</h3>
+                    <h3 class="sidebar-title"><img src="/files/img/label.svg" class="icon"> Catégorie</h3>
                     <div class="tags-input">
                         <select x-model="post.category" class="tag-input">
                             <option value="">--Aucune--</option>
@@ -167,12 +167,12 @@
 
                 <!-- Tags -->
                 <div class="sidebar-card">
-                    <h3 class="sidebar-title">🏷️ Tags</h3>
+                    <h3 class="sidebar-title"><img src="/files/img/label.svg" class="icon"> Tags</h3>
                     <div class="tags-input" @click="$refs.tagInput.focus()">
                         <template x-for="(tag, index) in post.tags" :key="index">
                             <span class="tag-item">
                                 <span x-text="tag"></span>
-                                <span class="tag-remove" @click="removeTag(index)">×</span>
+                                <span class="tag-remove" @click="removeTag(index)"><img src="/files/img/x.svg" class="icon"></span>
                             </span>
                         </template>
                         <input x-ref="tagInput"
@@ -189,7 +189,7 @@
 
                 <!-- Aperçu -->
                 <div class="sidebar-card">
-                    <h3 class="sidebar-title">👁️ Aperçu en temps réel</h3>
+                    <h3 class="sidebar-title"><img src="/files/img/eye.svg" class="icon"> Aperçu en temps réel</h3>
                     <div class="preview-area" x-html="preview"></div>
                 </div>
             </div>

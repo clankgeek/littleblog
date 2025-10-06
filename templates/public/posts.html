@@ -6,10 +6,10 @@
     <style>
         {{.theme | safeCSS}}
     </style>
-    <link rel="stylesheet" href="/static/css/header.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/common.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/footer.css?{{ .BuildID }}">
-    <link rel="stylesheet" href="/static/css/posts.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/header.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/common.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/footer.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/posts.css?{{ .BuildID }}">
 </head>
 <body>
     {{ template "public_header" . }}
@@ -18,7 +18,7 @@
     </main>
     {{ template "footer" . }}
     {{ template "posts_scripts" . }}
-    <script src="static/js/common.js?{{ .BuildID }}"></script>
+    <script src="/files/js/common.js?{{ .BuildID }}"></script>
 </body>
 </html>
 {{ end }}
@@ -30,11 +30,11 @@
             <h1 class="article-title">{{ .post.Title }}</h1>
             <div class="article-meta">
                 <div class="meta-item">
-                    <span>📝</span>
+                    <span><img src="/files/img/memo.svg" class="icon"></span>
                     <span>Par <strong>{{ .post.Author }}</strong></span>
                 </div>
                 <div class="meta-item">
-                    <span>📅</span>
+                    <span><img src="/files/img/calendar.svg" class="icon"></span>
                     <span>{{ .post.CreatedAt.Format "02/01/2006 à 15:04" }}</span>
                 </div>
             </div>
@@ -57,14 +57,14 @@
                 <button @click="toggleLike" 
                         :class="{ 'liked': isLiked }"
                         class="btn btn-primary btn-like">
-                    <span x-show="!isLiked">🤍</span>
-                    <span x-show="isLiked">❤️</span>
+                    <span x-show="!isLiked"><img src="/files/img/whiteheart.svg" class="icon"></span>
+                    <span x-show="isLiked"><img src="/files/img/redheart.svg" class="icon"></span>
                     <span x-text="likeCount + ' likes'"></span>
                 </button>
                 
                 <button @click="showComments = !showComments" 
                         class="btn btn-outline">
-                    <span>💬</span>
+                    <span><img src="/files/img/ballon.svg" class="icon"></span>
                     <span x-text="comments.length + ' commentaires'"></span>
                 </button>
             </div>
@@ -72,13 +72,13 @@
             <!-- Actions administrateur -->
             {{- if .isAuthenticated }}
             <div class="admin-actions">
-                <h4 style="margin-bottom: 15px; color: var(--dark-color);">🔐 Actions Administrateur</h4>
+                <h4 style="margin-bottom: 15px; color: var(--dark-color);"><img src="/files/img/locked.svg" class="icon"> Actions Administrateur</h4>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <a href="/admin/posts/{{ .post.ID }}/edit" class="btn btn-warning">
-                        ✏️ Éditer cet article
+                        <img src="/files/img/pencil.svg" class="icon"> Éditer cet article
                     </a>
                     <a href="/admin/posts" class="btn btn-primary">
-                        📝 Gérer tous les articles
+                        <img src="/files/img/memo.svg" class="icon"> Gérer tous les articles
                     </a>
                 </div>
             </div>
@@ -107,7 +107,7 @@
                     </template>
 
                     <div x-show="comments.length === 0" class="no-comments">
-                        <p>✨ Aucun commentaire pour le moment.</p>
+                        <p><img src="/files/img/sparkles.svg" class="icon"> Aucun commentaire pour le moment.</p>
                         <p>Soyez le premier à partager votre avis !</p>
                     </div>
                 </div>
@@ -116,7 +116,7 @@
                 <form @submit.prevent="addComment" 
                       class="comment-form"
                       :class="{ 'loading': loading }">
-                    <h4 style="margin-bottom: 25px; color: var(--dark-color);">💭 Ajouter un commentaire</h4>
+                    <h4 style="margin-bottom: 25px; color: var(--dark-color);"><img src="/files/img/tballon.svg" class="icon"> Ajouter un commentaire</h4>
                     
                     <div class="form-group">
                         <label class="form-label" for="author">Votre nom</label>
@@ -140,8 +140,8 @@
                     <button type="submit" 
                             :disabled="loading || !newComment.author.trim() || !newComment.content.trim()"
                             class="btn btn-primary">
-                        <span x-show="!loading">🚀 Publier le commentaire</span>
-                        <span x-show="loading">⏳ Publication en cours...</span>
+                        <span x-show="!loading"><img src="/files/img/rocket.svg" class="icon"> Publier le commentaire</span>
+                        <span x-show="loading"><img src="/files/img/hourglass.svg" class="icon"> Publication en cours...</span>
                     </button>
                 </form>
             </div>

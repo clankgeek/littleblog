@@ -5,6 +5,17 @@
     box-sizing: border-box;
 }
 
+.username {
+    font-weight: 500;
+    color: var(--dark-color);
+}
+
+img.icon {
+  height: 2em;
+  width: auto;
+  vertical-align: middle;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     line-height: 1.7;
