@@ -70,10 +70,15 @@ func setupTestConfig() *Config {
 	return &Config{
 		SiteName:    "Test Blog",
 		Description: "Test Description",
-		DBPath:      ":memory:",
-		Admin_login: "admin",
-		Admin_hash:  "$argon2id$v=19$m=65536,t=3,p=2$abcdefghijklmnop$0123456789abcdef0123456789abcdef",
-		Production:  false,
+		Database: DatabaseConfig{
+			Db:   "sqlite",
+			Path: ":memory:",
+		},
+		User: UserConfig{
+			Login: "admin",
+			Hash:  "$argon2id$v=19$m=65536,t=3,p=2$abcdefghijklmnop$0123456789abcdef0123456789abcdef",
+		},
+		Production: false,
 	}
 }
 
@@ -145,7 +150,7 @@ func TestCreateExampleConfig(t *testing.T) {
 	err = yaml.Unmarshal(data, &config)
 	assert.NoError(t, err)
 	assert.Equal(t, "Mon Blog Tech", config.SiteName)
-	assert.Equal(t, "admin", config.Admin_login)
+	assert.Equal(t, "admin", config.User.Login)
 }
 
 func TestLoadConfig(t *testing.T) {
@@ -154,8 +159,13 @@ func TestLoadConfig(t *testing.T) {
 	config := &Config{
 		SiteName:    "Test Site",
 		Description: "Test Desc",
-		DBPath:      "test.db",
-		Admin_login: "testadmin",
+		Database: DatabaseConfig{
+			Db:   "sqlite",
+			Path: "test.db",
+		},
+		User: UserConfig{
+			Login: "testadmin",
+		},
 	}
 
 	data, err := yaml.Marshal(config)
@@ -168,7 +178,7 @@ func TestLoadConfig(t *testing.T) {
 	loaded, err := loadConfig(tempFile)
 	assert.NoError(t, err)
 	assert.Equal(t, config.SiteName, loaded.SiteName)
-	assert.Equal(t, config.Admin_login, loaded.Admin_login)
+	assert.Equal(t, config.User.Login, loaded.User.Login)
 
 	// Tester avec un fichier inexistant
 	_, err = loadConfig("nonexistent.yaml")
@@ -356,7 +366,7 @@ func TestLoginHandler(t *testing.T) {
 
 	// Créer un hash valide pour le test
 	hash, _ := HashPassword("testpassword")
-	configuration.Admin_hash = hash
+	configuration.User.Hash = hash
 
 	r.POST("/admin/login", loginHandler)
 
@@ -996,7 +1006,7 @@ func TestSessionManagement(t *testing.T) {
 
 	// Créer un hash valide
 	hash, _ := HashPassword("testpass")
-	configuration.Admin_hash = hash
+	configuration.User.Hash = hash
 
 	r.POST("/admin/login", loginHandler)
 	r.POST("/admin/logout", logoutHandler)

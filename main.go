@@ -46,6 +46,7 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/image/draw"
 	"gopkg.in/yaml.v3"
+	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -134,21 +135,35 @@ type UpdatePostRequest struct {
 }
 
 type Config struct {
-	SiteName    string     `yaml:"sitename"`
-	Description string     `yaml:"description"`
-	Theme       string     `yaml:"theme"`
-	DBPath      string     `yaml:"dbpath"`
-	Admin_login string     `yaml:"admin_login"`
-	Admin_pass  string     `yaml:"admin_pass"`
-	Admin_hash  string     `yaml:"admin_pass_hash"`
-	Production  bool       `yaml:"production"`
-	Listen      string     `yaml:"listen"`
-	Menu        []MenuItem `yaml:"menu"`
+	SiteName        string         `yaml:"sitename"`
+	Description     string         `yaml:"description"`
+	Theme           string         `yaml:"theme"`
+	TrustedProxies  []string       `yaml:"trustedproxies"`
+	TrustedPlatform string         `yaml:"trustedplatform"`
+	Database        DatabaseConfig `yaml:"database"`
+	StaticPath      string         `yaml:"staticpath"`
+	User            UserConfig     `yaml:"user"`
+	Production      bool           `yaml:"production"`
+	Listen          string         `yaml:"listen"`
+	Menu            []MenuItem     `yaml:"menu"`
+}
+
+type UserConfig struct {
+	Login string `yaml:"login"`
+	Pass  string `yaml:"pass"`
+	Hash  string `yaml:"hash"`
+}
+
+type DatabaseConfig struct {
+	Db   string `yaml:"db"`
+	Path string `yaml:"path"`
+	Dsn  string `yaml:"dsn"`
 }
 
 type MenuItem struct {
 	Key   string `yaml:"key"`
 	Value string `yaml:"value"`
+	Img   string `yaml:"img"`
 }
 
 // RSS représente le flux RSS complet
@@ -188,18 +203,24 @@ type Color struct {
 
 func createExampleConfig(filename string) error {
 	example := &Config{
-		SiteName:    "Mon Blog Tech",
-		Description: "Blog qui utilise littleblog",
-		Theme:       "blue",
-		DBPath:      "./blog.db",
-		Admin_login: "admin",
-		Admin_pass:  "admin123",
-		Admin_hash:  "",
-		Production:  false,
-		Listen:      ":8080",
+		SiteName:       "Mon Blog Tech",
+		Description:    "Blog qui utilise littleblog",
+		Theme:          "blue",
+		TrustedProxies: []string{"192.168.1.2"},
+		Database: DatabaseConfig{
+			Db:   "sqlite",
+			Path: "./blog.db",
+		},
+		User: UserConfig{
+			Login: "admin",
+			Pass:  "admin123",
+		},
+		StaticPath: "./static",
+		Production: false,
+		Listen:     ":8080",
 		Menu: []MenuItem{
 			{Key: "menu1", Value: "Mon premier menu"},
-			{Key: "menu2", Value: "Mon second menu"},
+			{Key: "menu2", Value: "Mon second menu", Img: "/static/image.png"},
 		},
 	}
 	return writeConfigYaml(filename, example)
@@ -235,25 +256,31 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 	// Convertir en config interne
 	conf := convertConfig(yamlConfig)
 
-	if conf.DBPath == "" {
-		return nil, fmt.Errorf("DBPath ne peut pas etre vide")
+	if conf.Database.Db == "sqlite" && conf.Database.Path == "" {
+		return nil, fmt.Errorf("database.path ne peut pas être vide")
+	}
+	if conf.Database.Db == "mysql" && conf.Database.Dsn == "" {
+		return nil, fmt.Errorf("database.dsn ne peut pas être vide")
+	}
+	if conf.Database.Db == "" {
+		return nil, fmt.Errorf("database.db ne peut pas être vide")
 	}
 
 	if conf.Listen == "" {
 		conf.Listen = ":8080"
 	}
 
-	if conf.Admin_pass != "" {
-		if len(conf.Admin_pass) < 8 {
+	if conf.User.Pass != "" {
+		if len(conf.User.Pass) < 8 {
 			return nil, fmt.Errorf("le mot de passe doit contenir au moins 8 caractères")
 		}
 
-		hash, err := argon2.GenerateFromPassword([]byte(conf.Admin_pass), argon2.DefaultParams)
+		hash, err := argon2.GenerateFromPassword([]byte(conf.User.Pass), argon2.DefaultParams)
 		if err != nil {
 			return nil, err
 		}
-		conf.Admin_hash = string(hash)
-		conf.Admin_pass = ""
+		conf.User.Hash = string(hash)
+		conf.User.Pass = ""
 		err = writeConfigYaml(configFile, conf)
 		if err != nil {
 			return nil, err
@@ -272,16 +299,17 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 // Convertir la config YAML en config interne
 func convertConfig(yamlConfig *Config) *Config {
 	conf := &Config{
-		SiteName:    yamlConfig.SiteName,
-		Description: yamlConfig.Description,
-		Theme:       yamlConfig.Theme,
-		DBPath:      yamlConfig.DBPath,
-		Admin_login: yamlConfig.Admin_login,
-		Admin_pass:  yamlConfig.Admin_pass,
-		Admin_hash:  yamlConfig.Admin_hash,
-		Production:  yamlConfig.Production,
-		Listen:      yamlConfig.Listen,
-		Menu:        yamlConfig.Menu,
+		SiteName:        yamlConfig.SiteName,
+		Description:     yamlConfig.Description,
+		Theme:           yamlConfig.Theme,
+		Database:        yamlConfig.Database,
+		User:            yamlConfig.User,
+		StaticPath:      yamlConfig.StaticPath,
+		Production:      yamlConfig.Production,
+		Listen:          yamlConfig.Listen,
+		Menu:            yamlConfig.Menu,
+		TrustedProxies:  yamlConfig.TrustedProxies,
+		TrustedPlatform: yamlConfig.TrustedPlatform,
 	}
 
 	return conf
@@ -380,10 +408,18 @@ func generateSecretKey() []byte {
 
 func initDatabase() {
 	var err error
-
-	db, err = gorm.Open(sqlite.Open(configuration.DBPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
-	})
+	switch configuration.Database.Db {
+	case "sqlite":
+		db, err = gorm.Open(sqlite.Open(configuration.Database.Path), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Info),
+		})
+	case "mysql":
+		db, err = gorm.Open(mysql.Open(configuration.Database.Dsn), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Info),
+		})
+	default:
+		err = fmt.Errorf("le type de database doit etre sqlite ou mysql")
+	}
 	if err != nil {
 		log.Fatal("Erreur connexion base de données:", err)
 	}
@@ -434,7 +470,7 @@ Ceci est le premier article avec le moteur de blog **littleblog**, qui utilise u
   - Language Go
   - Gin Web Framework
   - Accès à la base de données avec GORM
-  - Base de données Sqlite3
+  - Base de données Sqlite3 ou mysql
   - Middleware Session pour la page d'administration
   - Templates inclus dans le binaire
   - Configuration en Yaml (autogénéré par le binaire)
@@ -545,7 +581,11 @@ func GenerateMenu(items []MenuItem, category string) template.HTML {
 		if key == category {
 			active = " active"
 		}
-		menuStr += fmt.Sprintf("<a href=\"/%s\" class=\"nav-link%s\">%s</a>&nbsp;", key, active, item.Value)
+		img := ""
+		if item.Img != "" {
+			img = fmt.Sprintf("<img src=\"%s\" class=\"icon\"> ", item.Img)
+		}
+		menuStr += fmt.Sprintf("<a href=\"/%s\" class=\"nav-link%s\">%s%s</a>&nbsp;", key, active, img, item.Value)
 	}
 	return safeHtml(menuStr)
 }
@@ -864,6 +904,21 @@ func newServer() *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
+	if configuration.TrustedProxies != nil {
+		r.SetTrustedProxies(configuration.TrustedProxies)
+	}
+	if configuration.TrustedPlatform != "" {
+		switch configuration.TrustedPlatform {
+		case "cloudflare":
+			r.TrustedPlatform = gin.PlatformGoogleAppEngine
+		case "google":
+			r.TrustedPlatform = gin.PlatformGoogleAppEngine
+		case "flyio":
+			r.TrustedPlatform = gin.PlatformFlyIO
+		default:
+			r.TrustedPlatform = configuration.TrustedPlatform
+		}
+	}
 
 	// parser les templates
 	r.SetHTMLTemplate(getTemplates(configuration.Production))
@@ -901,7 +956,7 @@ func setRoutes(r *gin.Engine) {
 	})
 
 	// Route statiques
-	r.Static("/static/", "./static")
+	r.Static("/static/", configuration.StaticPath)
 	r.GET("/files/css/*.css", ServeMinifiedStatic(m))
 	r.GET("/files/js/*.js", ServeMinifiedStatic(m))
 	r.GET("/files/img/*.svg", ServeMinifiedStatic(m))
@@ -1102,8 +1157,8 @@ func loginHandler(c *gin.Context) {
 	}
 
 	// Vérification login / pass
-	err := argon2.CompareHashAndPassword([]byte(configuration.Admin_hash), []byte(req.Password))
-	if err != nil || req.Username != configuration.Admin_login {
+	err := argon2.CompareHashAndPassword([]byte(configuration.User.Hash), []byte(req.Password))
+	if err != nil || req.Username != configuration.User.Login {
 		log.Printf("Tentative de connexion échouée - User: %s, IP: %s", req.Username, c.ClientIP())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Identifiants incorrects"})
 		return
