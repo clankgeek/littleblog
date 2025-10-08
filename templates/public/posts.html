@@ -101,6 +101,9 @@
                             <div class="comment-header">
                                 <span class="comment-author" x-text="comment.author"></span>
                                 <span class="comment-date" x-text="formatDate(comment.created_at)"></span>
+                                {{- if .isAuthenticated }}
+                                <span class="comment-date"><button @click="deleteComment(comment.id)"><img src="/files/img/waste.svg" class="icon"></button>&nbsp;</span>
+                                {{- end }}
                             </div>
                             <div class="comment-content" x-text="comment.content"></div>
                         </div>
@@ -119,13 +122,41 @@
                     <h4 style="margin-bottom: 25px; color: var(--dark-color);"><img src="/files/img/tballon.svg" class="icon"> Ajouter un commentaire</h4>
                     
                     <div class="form-group">
-                        <label class="form-label" for="author">Votre nom</label>
+                        <label class="form-label" for="author">Votre pseudo</label>
                         <input x-model="newComment.author" 
                                id="author"
                                type="text" 
                                class="form-control"
-                               placeholder="Entrez votre nom"
+                               placeholder="Entrez votre pseudo"
                                required>
+                    </div>
+
+                    <div class="captcha-container">
+                        <label><img src="/files/img/locked.svg" class="icon"> Vérification de sécurité :</label>
+                        <p style="color: #666; font-size: 14px;">Résoudre l'opération mathématique</p>
+                        <img
+                            :src="captchaImage" 
+                            class="captcha-image" 
+                            alt="CAPTCHA"
+                            x-show="captchaImage"
+                            width="240"
+                            height="80">
+                        <div>
+                            <input class="form-control"
+                                type="text" 
+                                x-model="newComment.captchaAnswer" 
+                                placeholder="Entrez les chiffres" 
+                                required
+                                :disabled="loading"
+                                maxlength="6">
+                            <button 
+                                type="button" 
+                                class="btn" 
+                                @click="refreshCaptcha"
+                                :disabled="loading">
+                                <img src="/files/img/reload.svg" class="icon"> Voir le CAPTCHA
+                            </button>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -138,7 +169,7 @@
                     </div>
 
                     <button type="submit" 
-                            :disabled="loading || !newComment.author.trim() || !newComment.content.trim()"
+                            :disabled="loading || !newComment.author.trim() || !newComment.content.trim() || !newComment.captchaAnswer.trim()"
                             class="btn btn-primary">
                         <span x-show="!loading"><img src="/files/img/rocket.svg" class="icon"> Publier le commentaire</span>
                         <span x-show="loading"><img src="/files/img/hourglass.svg" class="icon"> Publication en cours...</span>
@@ -159,14 +190,54 @@ document.addEventListener('alpine:init', () => {
         likeCount: 0,
         isLiked: false,
         loading: false,
+        captchaImage: '',
         newComment: {
             author: '',
-            content: ''
+            content: '',
+            captchaID: '',
+            captchaAnswer: '',
         },
 
         async init() {
             await this.loadComments();
             await this.loadLikeStatus();
+        },
+
+        async deleteComment(commentId) {
+            try {
+                const response = await fetch(`/api/comments/${commentId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    this.comments = this.comments.filter(c => c.id !== commentId);
+                    window.showNotification('Commentaire supprimé avec succès !', 'success');
+                } else {
+                    window.showNotification('Erreur lors de la suppression du commenataire', 'error');
+                }
+            } catch (error) {
+                window.showNotification('Erreur lors de la suppression du commenataire', 'error');
+                console.error('Erreur:', error);
+            }
+        },
+
+        async refreshCaptcha() {
+            try {
+                const response = await fetch('/files/captcha');
+                const data = await response.json();
+                this.newComment.captchaID = data.captcha_id;
+                this.newComment.captchaAnswer = data.answer;
+                this.captchaImage = data.image;
+                if (data.answer) {
+                    console.log('Réponse du CAPTCHA:', data.answer);
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                this.showMessage('Erreur de chargement du CAPTCHA', 'error');
+            }
         },
 
         async loadComments() {
@@ -195,7 +266,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async addComment() {
-            if (!this.newComment.author.trim() || !this.newComment.content.trim()) {
+            if (!this.newComment.author.trim() || !this.newComment.content.trim() || !this.newComment.captchaAnswer.trim()) {
                 window.showNotification('Veuillez remplir tous les champs', 'error');
                 return;
             }
@@ -213,7 +284,8 @@ document.addEventListener('alpine:init', () => {
                 if (response.ok) {
                     const comment = await response.json();
                     this.comments.push(comment);
-                    this.newComment = { author: '', content: '' };
+                    this.newComment = { author: '', content: '', captchaId:'', captchaAnswer:'', captchaImage:''};
+                    this.captchaImage = ''
                     window.showNotification('Commentaire ajouté avec succès !', 'success');
                 } else {
                     const error = await response.json();

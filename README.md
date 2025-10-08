@@ -6,6 +6,7 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 
 - Infinity scroll sur la liste des articles
 - Articles avec contenu Markdown
+- Commentaires avec captcha
 - Recherche en temps réel
 - Administration des articles
 - Upload d'images
@@ -18,6 +19,7 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 - Backend
   - Language Go
   - Gin Web Framework
+  - Capcha base64Captcha
   - Accès à la base de données avec GORM
   - Base de données Sqlite3 ou mysql
   - Middleware Session pour la page d'administration
@@ -36,10 +38,16 @@ Utilise make, gcc et golang pour compiler
 
 ### Ubuntu
 
-Compile le binaire littleblog
+Compile le binaire littleblog si vous avez un environnement golang de configuré
 
 ```bash
   make build
+```
+
+Sinon vous pouvez utiliser le builder via une image docker
+
+```bash
+  ./docker-build.sh
 ```
 
 ### Créer la configuration
@@ -58,6 +66,7 @@ trustedproxies:
   - 192.168.1.2
 trustedplatform: #cloudflare, google, flyio, or header name, example X-CDN-Client-IP
 database:
+  redis: #localhost:6379, pour le capcha, si vide, utilisation store interne a go.
   db: sqlite3
   path: ./blog.db
   #db: mysql
@@ -66,12 +75,12 @@ user:
   login: admin
   pass: admin1234
 staticpath: "./static"
-production: false
+production: false #false pour la preprod, true en production
 listen: ":8080"
 menu:
-  - key: "hardware"
-    value: "Hardware"
-    img: "/static/gpu.png"
+  - key: "linux"
+    value: "Ubuntu"
+    img: "/static/linux.png"
   - key: "software"
     value: "Logiciel"
 ```

@@ -19,7 +19,7 @@
     font-size: 2.5em;
     font-weight: 800;
     margin-bottom: 20px;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .article-meta {
@@ -46,12 +46,12 @@
 }
 
 .tag {
-    background: rgba(255,255,255,0.2);
+    background: rgba(255, 255, 255, 0.2);
     color: white;
     padding: 6px 12px;
     border-radius: 20px;
     font-size: 0.85em;
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .article-content {
@@ -61,8 +61,8 @@
 }
 
 img {
-  max-width: 100%;
-  height: auto;
+    max-width: 100%;
+    height: auto;
 }
 
 /* Styles Markdown */
@@ -134,7 +134,7 @@ img {
     color: inherit;
     font-family: 'Fira Code', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
     font-size: 0.9em;
-    line-height: 1.5;  
+    line-height: 1.5;
     border: none;
 }
 
@@ -243,6 +243,21 @@ img {
     border-color: var(--dark-color);
 }
 
+.captcha-container {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f9f9f9;
+    border-radius: 4px;
+}
+
+.captcha-image {
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    margin: 10px 0;
+    background: white;
+    display: block;
+}
+
 /* Comments */
 .comments-section {
     background: white;
@@ -332,6 +347,7 @@ textarea.form-control {
 
 /* Responsive */
 @media (max-width: 768px) {
+
     .article-header,
     .article-content,
     .comment-form,

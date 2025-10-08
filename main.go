@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"embed"
@@ -27,13 +28,15 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/andskur/argon2-hashing"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
+	"github.com/mojocn/base64Captcha"
+	"github.com/penglongli/gin-metrics/ginmetrics"
 	"github.com/tdewolff/minify/v2"
-
-	"github.com/andskur/argon2-hashing"
 	"github.com/tdewolff/minify/v2/css"
 	htmlmin "github.com/tdewolff/minify/v2/html"
 	"github.com/tdewolff/minify/v2/js"
@@ -62,6 +65,7 @@ var (
 	theme         string
 	rsslink       template.HTML
 	BuildID       string
+	captcha       *captchas
 )
 
 //go:embed templates/**/*.html
@@ -71,6 +75,11 @@ var templatesFS embed.FS
 //go:embed ressources/css
 //go:embed ressources/img
 var staticFS embed.FS
+
+type captchas struct {
+	store  base64Captcha.Store
+	driver base64Captcha.Driver
+}
 
 // Models avec tags GORM
 type Post struct {
@@ -108,8 +117,10 @@ type Like struct {
 
 // Requests structs
 type CreateCommentRequest struct {
-	Author  string `json:"author" binding:"required"`
-	Content string `json:"content" binding:"required"`
+	CaptchaID     string `json:"captchaID"`
+	CaptchaAnswer string `json:"captchaAnswer"`
+	Author        string `json:"author" binding:"required"`
+	Content       string `json:"content" binding:"required"`
 }
 
 type LoginRequest struct {
@@ -155,9 +166,10 @@ type UserConfig struct {
 }
 
 type DatabaseConfig struct {
-	Db   string `yaml:"db"`
-	Path string `yaml:"path"`
-	Dsn  string `yaml:"dsn"`
+	Redis string `yaml:"redis"`
+	Db    string `yaml:"db"`
+	Path  string `yaml:"path"`
+	Dsn   string `yaml:"dsn"`
 }
 
 type MenuItem struct {
@@ -201,6 +213,105 @@ type Color struct {
 	R, G, B int
 }
 
+// Créer un store Redis personnalisé
+type RedisStore struct {
+	client     *redis.Client
+	expiration time.Duration
+}
+
+func NewRedisStore(client *redis.Client) *RedisStore {
+	return &RedisStore{
+		client:     client,
+		expiration: 5 * time.Minute,
+	}
+}
+
+func (r *RedisStore) Set(id string, value string) error {
+	ctx := context.Background()
+	return r.client.Set(ctx, "captcha:"+id, value, r.expiration).Err()
+}
+
+func (r *RedisStore) Get(id string, clear bool) string {
+	ctx := context.Background()
+	key := "captcha:" + id
+	val, _ := r.client.Get(ctx, key).Result()
+	if clear {
+		r.client.Del(ctx, key)
+	}
+	return val
+}
+
+func (r *RedisStore) Verify(id, answer string, clear bool) bool {
+	v := r.Get(id, clear)
+	return v == answer
+}
+
+func newCaptcha(host string) *captchas {
+	var store base64Captcha.Store
+	if host != "" {
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: host,
+		})
+		store = NewRedisStore(redisClient)
+	} else {
+		store = base64Captcha.DefaultMemStore
+	}
+
+	driver := base64Captcha.NewDriverMath(
+		80,  // hauteur
+		240, // largeur
+		6,   // nombre d'opérations à afficher
+		base64Captcha.OptionShowHollowLine,
+		nil, // couleur de fond
+		nil, // police
+		nil, // couleurs
+	)
+
+	return &captchas{
+		store:  store,
+		driver: driver,
+	}
+}
+
+func (cap *captchas) generateCaptcha(c *gin.Context) {
+	captcha := base64Captcha.NewCaptcha(cap.driver, cap.store)
+
+	id, b64s, answer, err := captcha.Generate()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Erreur lors de la génération du CAPTCHA",
+		})
+		return
+	}
+
+	data := gin.H{
+		"captcha_id": id,
+		"image":      b64s,
+		"answer":     "",
+	}
+
+	if !configuration.Production {
+		fmt.Printf("CAPTCHA généré - ID: %s, Réponse: %s\n", id, answer)
+		data["answer"] = answer
+	}
+
+	c.JSON(http.StatusOK, data)
+}
+
+func (cap *captchas) verifyCaptcha(captchaID string, captchaAnswer string) error {
+	captchaID = strings.TrimSpace(captchaID)
+	captchaAnswer = strings.TrimSpace(captchaAnswer)
+
+	if captchaID == "" || captchaAnswer == "" {
+		return fmt.Errorf("CAPTCHA manquant")
+	}
+
+	if !cap.store.Verify(captchaID, captchaAnswer, true) {
+		return fmt.Errorf("CAPTCHA incorrect")
+	}
+	return nil
+}
+
 func createExampleConfig(filename string) error {
 	example := &Config{
 		SiteName:       "Mon Blog Tech",
@@ -220,7 +331,7 @@ func createExampleConfig(filename string) error {
 		Listen:     ":8080",
 		Menu: []MenuItem{
 			{Key: "menu1", Value: "Mon premier menu"},
-			{Key: "menu2", Value: "Mon second menu", Img: "/static/image.png"},
+			{Key: "menu2", Value: "Mon second menu", Img: "/static/linux.png"},
 		},
 	}
 	return writeConfigYaml(filename, example)
@@ -619,6 +730,7 @@ func GenerateThemeCSS(colorName string) string {
 		"pink":   "#e83e8c",
 		"gray":   "#6c757d",
 		"grey":   "#6c757d",
+		"black":  "#000000",
 	}
 
 	// Récupérer la couleur de base
@@ -886,6 +998,7 @@ func initConfiguration() {
 		os.Exit(1)
 	}
 	configuration = conf
+	captcha = newCaptcha(configuration.Database.Redis)
 }
 
 func setMiddleware(r *gin.Engine) {
@@ -907,6 +1020,7 @@ func newServer() *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
+
 	if configuration.TrustedProxies != nil {
 		r.SetTrustedProxies(configuration.TrustedProxies)
 	}
@@ -964,10 +1078,16 @@ func setRoutes(r *gin.Engine) {
 	r.GET("/files/js/*.js", ServeMinifiedStatic(m))
 	r.GET("/files/img/*.svg", ServeMinifiedStatic(m))
 
+	// Route metrics
+	metric := ginmetrics.GetMonitor()
+	metric.SetMetricPath("/files/metrics")
+	metric.Use(r)
+
 	// Routes publiques
 	r.GET("/", indexHandler)
 	r.GET("/:category", indexHandler)
 	r.GET("/post/:id", postHandler)
+	r.GET("/files/captcha", captcha.generateCaptcha)
 
 	// Routes d'authentification
 	r.GET("/admin/login", loginPageHandler)
@@ -995,6 +1115,7 @@ func setRoutes(r *gin.Engine) {
 		api.GET("/posts/:id", getPostAPI)
 		api.GET("/posts/:id/comments", getCommentsAPI)
 		api.POST("/posts/:id/comments", addCommentAPI)
+		api.DELETE("/comments/:id", authRequired(), deleteCommentAPI)
 		api.GET("/posts/:id/like-status", getLikeStatusAPI)
 		api.POST("/posts/:id/like", toggleLikeAPI)
 		api.GET("/search", searchPostsAPI)
@@ -1224,7 +1345,7 @@ func adminDashboardHandler(c *gin.Context) {
 func getMemUsage() string {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	return fmt.Sprintf("Statistiques mémoire: allouée = %v Mo, total allouée = %d, système = %v Mo, nombre de GC = %v\n", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+	return fmt.Sprintf("Statistiques mémoire: allouée = %v Mo, total allouée = %d Mo, système = %v Mo, nombre de GC = %v\n", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 }
 
 func uploadImageHandler(c *gin.Context) {
@@ -1719,6 +1840,22 @@ func getPostAPI(c *gin.Context) {
 	c.JSON(http.StatusOK, post)
 }
 
+func deleteCommentAPI(c *gin.Context) {
+	idStr := c.Param("id")
+	commentID, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalide"})
+		return
+	}
+
+	if err := db.Where("id = ?", uint(commentID)).Delete(&Comment{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur suppression commentaires"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Commentaire supprimé avec succès"})
+}
+
 func getCommentsAPI(c *gin.Context) {
 	idStr := c.Param("id")
 	postID, err := strconv.ParseUint(idStr, 10, 32)
@@ -1754,6 +1891,13 @@ func addCommentAPI(c *gin.Context) {
 
 	var req CreateCommentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// controle du captcha
+	err = captcha.verifyCaptcha(req.CaptchaID, req.CaptchaAnswer)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
