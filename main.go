@@ -267,7 +267,10 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 	}
 
 	if conf.Listen == "" {
-		conf.Listen = ":8080"
+		conf.Listen = "localhost:8080"
+	}
+	if strings.HasPrefix(conf.Listen, ":") {
+		conf.Listen = "localhost" + conf.Listen
 	}
 
 	if conf.User.Pass != "" {
@@ -729,10 +732,10 @@ func getRenderTime(c *gin.Context) any {
 
 func formatDuration(d time.Duration) string {
 	if d < time.Millisecond {
-		return fmt.Sprintf("%.2fµs", float64(d.Nanoseconds())/1000)
+		return fmt.Sprintf("%dµs", int(d.Nanoseconds())/1000)
 	}
 	if d < time.Second {
-		return fmt.Sprintf("%.2fms", float64(d.Nanoseconds())/1e6)
+		return fmt.Sprintf("%dms", int(d.Nanoseconds())/1e6)
 	}
 	return fmt.Sprintf("%.2fs", d.Seconds())
 }
@@ -1003,13 +1006,8 @@ func setRoutes(r *gin.Engine) {
 }
 
 func startServer(r *gin.Engine) {
-	listen := ""
-	if strings.HasPrefix(configuration.Listen, ":") {
-		listen = "localhost" + configuration.Listen
-	}
-
-	log.Printf("Serveur démarré sur http://%s\n", listen)
-	log.Printf("Admin: http://%s/admin/login\n", listen)
+	log.Printf("Serveur démarré sur http://%s\n", configuration.Listen)
+	log.Printf("Admin: http://%s/admin/login\n", configuration.Listen)
 	r.Run(configuration.Listen)
 }
 
