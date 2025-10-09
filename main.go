@@ -35,7 +35,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/mojocn/base64Captcha"
-	"github.com/penglongli/gin-metrics/ginmetrics"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
 	htmlmin "github.com/tdewolff/minify/v2/html"
@@ -1077,11 +1076,6 @@ func setRoutes(r *gin.Engine) {
 	r.GET("/files/css/*.css", ServeMinifiedStatic(m))
 	r.GET("/files/js/*.js", ServeMinifiedStatic(m))
 	r.GET("/files/img/*.svg", ServeMinifiedStatic(m))
-
-	// Route metrics
-	metric := ginmetrics.GetMonitor()
-	metric.SetMetricPath("/files/metrics")
-	metric.Use(r)
 
 	// Routes publiques
 	r.GET("/", indexHandler)
