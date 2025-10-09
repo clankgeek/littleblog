@@ -1,0 +1,41 @@
+
+services:
+  littleblog:
+    build: .
+    command: './build/littleblog -config test.yaml'
+    ports:
+      - "8080:8080"
+      - "8090:8090"
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    networks:
+      - monitoring
+    links:
+      - prometheus:prometheus
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  grafana-storage:

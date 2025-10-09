@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'littleblog'
+    static_configs:
+      - targets: ['littleblog:8090']  # Nom du service Docker
+    metrics_path: '/metrics'

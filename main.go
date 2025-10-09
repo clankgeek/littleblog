@@ -35,6 +35,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/mojocn/base64Captcha"
+	"github.com/penglongli/gin-metrics/ginmetrics"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
 	htmlmin "github.com/tdewolff/minify/v2/html"
@@ -154,8 +156,13 @@ type Config struct {
 	StaticPath      string         `yaml:"staticpath"`
 	User            UserConfig     `yaml:"user"`
 	Production      bool           `yaml:"production"`
-	Listen          string         `yaml:"listen"`
+	Listen          ListenConfig   `yaml:"listen"`
 	Menu            []MenuItem     `yaml:"menu"`
+}
+
+type ListenConfig struct {
+	Website string `yaml:"website"`
+	Metrics string `yaml:"metrics"`
 }
 
 type UserConfig struct {
@@ -313,21 +320,23 @@ func (cap *captchas) verifyCaptcha(captchaID string, captchaAnswer string) error
 
 func createExampleConfig(filename string) error {
 	example := &Config{
-		SiteName:       "Mon Blog Tech",
-		Description:    "Blog qui utilise littleblog",
-		Theme:          "blue",
-		TrustedProxies: []string{"192.168.1.2"},
+		SiteName:    "Mon Blog Tech",
+		Description: "Blog qui utilise littleblog",
+		Theme:       "blue",
 		Database: DatabaseConfig{
 			Db:   "sqlite",
-			Path: "./blog.db",
+			Path: "./test.db",
 		},
 		User: UserConfig{
 			Login: "admin",
-			Pass:  "admin123",
+			Pass:  "admin1234",
 		},
 		StaticPath: "./static",
 		Production: false,
-		Listen:     ":8080",
+		Listen: ListenConfig{
+			Website: "0.0.0.0:8080",
+			Metrics: "0.0.0.0:8090",
+		},
 		Menu: []MenuItem{
 			{Key: "menu1", Value: "Mon premier menu"},
 			{Key: "menu2", Value: "Mon second menu", Img: "/static/linux.png"},
@@ -345,8 +354,10 @@ func writeConfigYaml(filename string, conf *Config) error {
 	return os.WriteFile(filename, data, 0644)
 }
 
-func handleExampleCreation() error {
-	filename := "littleblog.yaml"
+func handleExampleCreation(filename string) error {
+	if filename == "" {
+		filename = "littleblog.yaml"
+	}
 	if err := createExampleConfig(filename); err != nil {
 		return fmt.Errorf("erreur création exemple: %v", err)
 	}
@@ -376,11 +387,11 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 		return nil, fmt.Errorf("database.db ne peut pas être vide")
 	}
 
-	if conf.Listen == "" {
-		conf.Listen = "localhost:8080"
+	if conf.Listen.Website == "" {
+		conf.Listen.Website = "localhost:8080"
 	}
-	if strings.HasPrefix(conf.Listen, ":") {
-		conf.Listen = "localhost" + conf.Listen
+	if strings.HasPrefix(conf.Listen.Website, ":") {
+		conf.Listen.Website = "localhost" + conf.Listen.Website
 	}
 
 	if conf.User.Pass != "" {
@@ -967,6 +978,25 @@ func getTemplates(production bool) *template.Template {
 	return tmpl
 }
 
+func createExample(shouldCreateExample bool, configFile string) {
+	// Handle example creation
+	if shouldCreateExample {
+		if err := handleExampleCreation(""); err != nil {
+			log.Fatalf("❌ %v", err)
+		}
+		os.Exit(1)
+	}
+
+	_, err := os.Stat(configFile)
+	if err != nil && os.IsNotExist(err) {
+		if err := handleExampleCreation(configFile); err != nil {
+			log.Fatalf("❌ %v", err)
+			os.Exit(1)
+		}
+
+	}
+}
+
 func initConfiguration() {
 	configFile, shouldCreateExample, versionDisplay, err := parseCommandLineArgs()
 	if err != nil {
@@ -982,13 +1012,7 @@ func initConfiguration() {
 		os.Exit(0)
 	}
 
-	// Handle example creation
-	if shouldCreateExample {
-		if err := handleExampleCreation(); err != nil {
-			log.Fatalf("❌ %v", err)
-		}
-		os.Exit(1)
-	}
+	createExample(shouldCreateExample, configFile)
 
 	// Load and validate configuration
 	conf, err := loadAndConvertConfig(configFile)
@@ -1066,6 +1090,10 @@ func setRoutes(r *gin.Engine) {
 	// middleware rate limiter
 	middlewareLimiter := newMiddlewareLimiter()
 
+	// metrics routes (port 8090)
+	metrics := ginmetrics.GetMonitor()
+	metrics.Use(r)
+
 	//default
 	r.NoRoute(func(c *gin.Context) {
 		pageNotFound(c, "Page non trouvée")
@@ -1121,9 +1149,17 @@ func setRoutes(r *gin.Engine) {
 }
 
 func startServer(r *gin.Engine) {
-	log.Printf("Serveur démarré sur http://%s\n", configuration.Listen)
-	log.Printf("Admin: http://%s/admin/login\n", configuration.Listen)
-	r.Run(configuration.Listen)
+	if configuration.Listen.Metrics != "" {
+		log.Printf("Metrics disponible sur http://%s/metrics\n", configuration.Listen.Metrics)
+		go func() {
+			http.Handle("/metrics", promhttp.Handler())
+			http.ListenAndServe(configuration.Listen.Metrics, nil)
+		}()
+	}
+
+	log.Printf("Website démarré sur http://%s\n", configuration.Listen.Website)
+	log.Printf("Admin: http://%s/admin/login\n", configuration.Listen.Website)
+	r.Run(configuration.Listen.Website)
 }
 
 func parseCommandLineArgs() (configFile string, shouldCreateExample bool, versionDisplay bool, err error) {

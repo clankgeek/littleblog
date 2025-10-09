@@ -76,7 +76,9 @@ user:
   pass: admin1234
 staticpath: "./static"
 production: false #false pour la preprod, true en production
-listen: ":8080"
+listen:
+  website: 0.0.0.0:8080
+  metrics: 0.0.0.0:8090 #enlever pour désactiver, promotheus format
 menu:
   - key: "linux"
     value: "Ubuntu"
@@ -84,3 +86,13 @@ menu:
   - key: "software"
     value: "Logiciel"
 ```
+
+### Exemple docker compose Littleblog + Promotheus + Grafana
+
+```bash
+  docker compose up
+```
+
+Dans grafana ajouter le Data Sources Promotheus, avec la connection à http://prometheus:9090
+
+Puis dans dashboard importer grafana.json.
