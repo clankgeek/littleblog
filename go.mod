@@ -1,6 +1,6 @@
 module littleblog
 
-go 1.24.6
+go 1.25.2
 
 require (
 	github.com/andskur/argon2-hashing v0.1.3
@@ -11,6 +11,7 @@ require (
 	github.com/mojocn/base64Captcha v1.3.8
 	github.com/penglongli/gin-metrics v0.1.13
 	github.com/prometheus/client_golang v1.23.2
+	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tdewolff/minify/v2 v2.24.3
 	github.com/ulule/limiter/v3 v3.11.2
@@ -51,6 +52,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-sqlite3 v1.14.32 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -78,4 +80,5 @@ require (
 	golang.org/x/text v0.30.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )

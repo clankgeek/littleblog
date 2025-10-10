@@ -6,7 +6,7 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 
 - Infinity scroll sur la liste des articles
 - Articles avec contenu Markdown
-- Commentaires avec captcha
+- Commentaires
 - Recherche en temps réel
 - Administration des articles
 - Upload d'images
@@ -19,13 +19,16 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 - Backend
   - Language Go
   - Gin Web Framework
-  - Capcha base64Captcha
+  - CAPTCHA base64Captcha (post des commentaires)
   - Accès à la base de données avec GORM
   - Base de données Sqlite3 ou mysql
   - Middleware Session pour la page d'administration
   - Templates inclus dans le binaire
   - Configuration en Yaml (autogénéré par le binaire)
   - API RESTful (json)
+  - /metrics pour Promotheus avec port dédié
+  - Logs zerolog et gestion des rotations lumberjack
+  - Compression gzip
 
 - Frontend
   - Html + CSS (via template Gin)
@@ -76,6 +79,14 @@ user:
   pass: admin1234
 staticpath: "./static"
 production: false #false pour la preprod, true en production
+logger:
+  level: debug #"debug", "info", "warn", "error"
+  logtofile: true
+  filepath: ./littleblog.log
+  maxsize: 100 #Taille max du fichier en Mo
+  maxbackups: 1 #Nombre max de fichiers de backup
+  maxAge: 30 #Nombre de jours avant suppression
+  compress: true #Compresser les anciens logs
 listen:
   website: 0.0.0.0:8080
   metrics: 0.0.0.0:8090 #enlever pour désactiver, promotheus format

@@ -16,7 +16,6 @@ import (
 	"image/png"
 	"io"
 	"io/fs"
-	"log"
 	mrand "math/rand"
 	"net/http"
 	"os"
@@ -37,6 +36,8 @@ import (
 	"github.com/mojocn/base64Captcha"
 	"github.com/penglongli/gin-metrics/ginmetrics"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
 	htmlmin "github.com/tdewolff/minify/v2/html"
@@ -49,6 +50,7 @@ import (
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/image/draw"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v3"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
@@ -158,6 +160,17 @@ type Config struct {
 	Production      bool           `yaml:"production"`
 	Listen          ListenConfig   `yaml:"listen"`
 	Menu            []MenuItem     `yaml:"menu"`
+	Logger          LoggerConfig   `yaml:"logger"`
+}
+
+type LoggerConfig struct {
+	Level      string `yaml:"level"`
+	LogToFile  bool   `yaml:"logtofile"`
+	FilePath   string `yaml:"filepath"`
+	MaxSize    int    `yaml:"maxsize"`
+	MaxBackups int    `yaml:"maxbackups"`
+	MaxAge     int    `yaml:"maxage"`
+	Compress   bool   `yaml:"compress"`
 }
 
 type ListenConfig struct {
@@ -223,6 +236,128 @@ type Color struct {
 type RedisStore struct {
 	client     *redis.Client
 	expiration time.Duration
+}
+
+// InitLogger configure le logger global Zerolog
+// Setup initialise le logger avec la configuration
+func initLogger(cfg LoggerConfig, production bool) {
+	// Définir le niveau de log
+	level := parseLevel(cfg.Level)
+	zerolog.SetGlobalLevel(level)
+
+	// Configurer le format de temps
+	zerolog.TimeFieldFormat = time.RFC3339
+
+	var writers []io.Writer
+
+	// Writer pour la console
+	if !production {
+		consoleWriter := zerolog.ConsoleWriter{
+			Out:        os.Stdout,
+			TimeFormat: "15:04:05",
+			NoColor:    false,
+		}
+		writers = append(writers, consoleWriter)
+	} else {
+		writers = append(writers, os.Stdout)
+	}
+
+	// Writer pour le fichier si activé
+	if cfg.LogToFile {
+		// Créer le dossier si nécessaire
+		dir := filepath.Dir(cfg.FilePath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Fatal().Err(err).Msg("Failed to create log directory")
+		}
+
+		fileWriter := &lumberjack.Logger{
+			Filename:   cfg.FilePath,
+			MaxSize:    cfg.MaxSize,
+			MaxBackups: cfg.MaxBackups,
+			MaxAge:     cfg.MaxAge,
+			Compress:   cfg.Compress,
+		}
+		writers = append(writers, fileWriter)
+	}
+
+	// Créer un multi-writer
+	multi := io.MultiWriter(writers...)
+
+	// Configurer le logger global
+	log.Logger = zerolog.New(multi).
+		With().
+		Timestamp().
+		Caller().
+		Logger()
+
+	environnment := "production"
+	if !production {
+		environnment = "developpement"
+	}
+	log.Info().
+		Str("environment", environnment).
+		Str("level", cfg.Level).
+		Bool("log_to_file", cfg.LogToFile).
+		Msg("Logger initialized")
+}
+
+func parseLevel(level string) zerolog.Level {
+	switch level {
+	case "debug":
+		return zerolog.DebugLevel
+	case "info":
+		return zerolog.InfoLevel
+	case "warn":
+		return zerolog.WarnLevel
+	case "error":
+		return zerolog.ErrorLevel
+	default:
+		return zerolog.InfoLevel
+	}
+}
+
+// WithFields retourne un logger avec des champs prédéfinis
+func WithFields(fields map[string]interface{}) zerolog.Logger {
+	ctx := log.With()
+	for k, v := range fields {
+		ctx = ctx.Interface(k, v)
+	}
+	return ctx.Logger()
+}
+
+// WithRequestID retourne un logger avec un request ID
+func WithRequestID(requestID string) zerolog.Logger {
+	return log.With().Str("request_id", requestID).Logger()
+}
+
+// Debug logue un message de debug
+func LogDebug(msg string) *zerolog.Event {
+	return log.Debug().Str("msg", msg)
+}
+
+// Info logue un message d'information
+func LogInfo(msg string) *zerolog.Event {
+	return log.Info().Str("msg", msg)
+}
+
+// Info logue avec printf
+func LogPrintf(format string, a ...any) *zerolog.Event {
+	return log.Info().Str("msg", fmt.Sprintf(format, a))
+}
+
+// Warn logue un avertissement
+func LogWarn(msg string) *zerolog.Event {
+	return log.Warn().Str("msg", msg)
+}
+
+// Error logue une erreur
+func LogError(err error, msg string) *zerolog.Event {
+	return log.Error().Err(err).Str("msg", msg)
+}
+
+// Fatal logue une erreur fatale et arrête le programme
+func LogFatal(err error, msg string) *zerolog.Event {
+	return log.Fatal().Err(err).Str("msg", msg)
 }
 
 func NewRedisStore(client *redis.Client) *RedisStore {
@@ -333,6 +468,10 @@ func createExampleConfig(filename string) error {
 		},
 		StaticPath: "./static",
 		Production: false,
+		Logger: LoggerConfig{
+			Level:     "info",
+			LogToFile: false,
+		},
 		Listen: ListenConfig{
 			Website: "0.0.0.0:8080",
 			Metrics: "0.0.0.0:8090",
@@ -434,6 +573,7 @@ func convertConfig(yamlConfig *Config) *Config {
 		Menu:            yamlConfig.Menu,
 		TrustedProxies:  yamlConfig.TrustedProxies,
 		TrustedPlatform: yamlConfig.TrustedPlatform,
+		Logger:          yamlConfig.Logger,
 	}
 
 	return conf
@@ -472,14 +612,14 @@ func initMarkdown() {
 			html.WithUnsafe(),
 		),
 	)
-	log.Println("Convertisseur Markdown initialisé")
+	LogInfo("Convertisseur Markdown initialisé")
 }
 
 // Convertir Markdown en HTML
 func convertMarkdownToHTML(markdown string) template.HTML {
 	var buf bytes.Buffer
 	if err := md.Convert([]byte(markdown), &buf); err != nil {
-		log.Printf("Erreur conversion Markdown: %v", err)
+		LogError(err, "Erreur conversion Markdown")
 		return template.HTML("<pre>" + template.HTMLEscapeString(markdown) + "</pre>")
 	}
 	return template.HTML(buf.String())
@@ -525,7 +665,7 @@ func generateSecretKey() []byte {
 	key := make([]byte, 32)
 	_, err := rand.Read(key)
 	if err != nil {
-		log.Fatal("Erreur génération clé secrète:", err)
+		LogFatal(err, "Erreur génération clé secrète")
 	}
 	return key
 }
@@ -545,12 +685,12 @@ func initDatabase() {
 		err = fmt.Errorf("le type de database doit etre sqlite ou mysql")
 	}
 	if err != nil {
-		log.Fatal("Erreur connexion base de données:", err)
+		LogFatal(err, "Erreur connexion base de données:")
 	}
 
 	err = db.AutoMigrate(&Post{}, &Comment{}, &Like{})
 	if err != nil {
-		log.Fatal("Erreur migration:", err)
+		LogFatal(err, "Erreur migration:")
 	}
 
 	var count int64
@@ -560,7 +700,7 @@ func initDatabase() {
 		seedDatabase()
 	}
 
-	log.Println("Base de données initialisée avec succès")
+	LogInfo("Base de données initialisée avec succès")
 }
 
 func getFirstMenuKey(conf *Config) string {
@@ -571,7 +711,7 @@ func getFirstMenuKey(conf *Config) string {
 }
 
 func seedDatabase() {
-	log.Println("Création des données d'exemple...")
+	LogInfo("Création des données d'exemple...")
 
 	posts := []Post{
 		{
@@ -617,11 +757,10 @@ N'hésitez pas à laisser un commentaire !`,
 	for i := range posts {
 		result := db.Create(&posts[i])
 		if result.Error != nil {
-			log.Printf("Erreur création post %d: %v", i+1, result.Error)
+			LogPrintf("Erreur création post %d: %v", i+1, result.Error)
 		}
 	}
-
-	log.Println("Données d'exemple créées avec succès")
+	LogInfo("Données d'exemple créées avec succès")
 }
 
 func generateRandomString(length int) string {
@@ -838,6 +977,80 @@ func jsonify(v any) template.JS {
 	return template.JS(b)
 }
 
+func middlerwareLogger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		raw := c.Request.URL.RawQuery
+
+		// Traiter la requête
+		c.Next()
+
+		// Calculer la latence
+		latency := time.Since(start)
+
+		// Récupérer les informations de la requête
+		statusCode := c.Writer.Status()
+		method := c.Request.Method
+		clientIP := c.ClientIP()
+		userAgent := c.Request.UserAgent()
+
+		// Construire le chemin complet avec query string
+		if raw != "" {
+			path = path + "?" + raw
+		}
+
+		// Créer l'événement de log avec le niveau approprié
+		var logEvent *zerolog.Event
+		switch {
+		case statusCode >= 500:
+			logEvent = log.Error()
+		case statusCode >= 400:
+			logEvent = log.Warn()
+		default:
+			logEvent = log.Info()
+		}
+
+		// Ajouter les champs et logger
+		logEvent.
+			Str("method", method).
+			Str("path", path).
+			Int("status", statusCode).
+			Dur("latency", latency).
+			Str("ip", clientIP).
+			Str("user_agent", userAgent).
+			Int("body_size", c.Writer.Size()).
+			Msg("HTTP Request")
+
+		// Logger les erreurs s'il y en a
+		if len(c.Errors) > 0 {
+			for _, err := range c.Errors {
+				log.Error().
+					Err(err.Err).
+					Str("type", string(err.Type)).
+					Msg("Request error")
+			}
+		}
+	}
+}
+
+func middlewareRecovery() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Error().
+					Interface("error", err).
+					Str("path", c.Request.URL.Path).
+					Str("method", c.Request.Method).
+					Msg("Panic recovered")
+
+				c.AbortWithStatus(500)
+			}
+		}()
+		c.Next()
+	}
+}
+
 func middlewareRenderTime() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Stocker le temps de début pour utilisation dans les handlers
@@ -982,7 +1195,7 @@ func createExample(shouldCreateExample bool, configFile string) {
 	// Handle example creation
 	if shouldCreateExample {
 		if err := handleExampleCreation(""); err != nil {
-			log.Fatalf("❌ %v", err)
+			fmt.Printf("❌ %v\n", err)
 		}
 		os.Exit(1)
 	}
@@ -990,7 +1203,7 @@ func createExample(shouldCreateExample bool, configFile string) {
 	_, err := os.Stat(configFile)
 	if err != nil && os.IsNotExist(err) {
 		if err := handleExampleCreation(configFile); err != nil {
-			log.Fatalf("❌ %v", err)
+			fmt.Printf("❌ %v\n", err)
 			os.Exit(1)
 		}
 
@@ -1017,7 +1230,7 @@ func initConfiguration() {
 	// Load and validate configuration
 	conf, err := loadAndConvertConfig(configFile)
 	if err != nil {
-		log.Fatalf("❌ %v", err)
+		fmt.Printf("❌ %v\n", err)
 		os.Exit(1)
 	}
 	configuration = conf
@@ -1025,6 +1238,10 @@ func initConfiguration() {
 }
 
 func setMiddleware(r *gin.Engine) {
+	// logger
+	r.Use(middlerwareLogger())
+	r.Use(middlewareRecovery())
+
 	// use Compression, with gzip
 	r.Use(gzip.Gzip(gzip.BestSpeed))
 
@@ -1042,7 +1259,7 @@ func newServer() *gin.Engine {
 	if configuration.Production {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	r := gin.Default()
+	r := gin.New()
 
 	if configuration.TrustedProxies != nil {
 		r.SetTrustedProxies(configuration.TrustedProxies)
@@ -1150,15 +1367,15 @@ func setRoutes(r *gin.Engine) {
 
 func startServer(r *gin.Engine) {
 	if configuration.Listen.Metrics != "" {
-		log.Printf("Metrics disponible sur http://%s/metrics\n", configuration.Listen.Metrics)
+		LogPrintf("Metrics disponible sur http://%s/metrics\n", configuration.Listen.Metrics)
 		go func() {
 			http.Handle("/metrics", promhttp.Handler())
 			http.ListenAndServe(configuration.Listen.Metrics, nil)
 		}()
 	}
 
-	log.Printf("Website démarré sur http://%s\n", configuration.Listen.Website)
-	log.Printf("Admin: http://%s/admin/login\n", configuration.Listen.Website)
+	LogPrintf("Website démarré sur http://%s\n", configuration.Listen.Website)
+	LogPrintf("Admin: http://%s/admin/login\n", configuration.Listen.Website)
 	r.Run(configuration.Listen.Website)
 }
 
@@ -1189,6 +1406,7 @@ func main() {
 	}
 
 	initConfiguration()
+	initLogger(configuration.Logger, configuration.Production)
 	initMarkdown()
 	initDatabase()
 
@@ -1308,11 +1526,11 @@ func loginHandler(c *gin.Context) {
 	// Vérification login / pass
 	err := argon2.CompareHashAndPassword([]byte(configuration.User.Hash), []byte(req.Password))
 	if err != nil || req.Username != configuration.User.Login {
-		log.Printf("Tentative de connexion échouée - User: %s, IP: %s", req.Username, c.ClientIP())
+		LogPrintf("Tentative de connexion échouée - User: %s, IP: %s", req.Username, c.ClientIP())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Identifiants incorrects"})
 		return
 	}
-	log.Printf("Connexion réussie - User: %s, IP: %s", req.Username, c.ClientIP())
+	LogPrintf("Connexion réussie - User: %s, IP: %s", req.Username, c.ClientIP())
 
 	// Créer la session
 	session := sessions.Default(c)
