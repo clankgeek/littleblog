@@ -16,6 +16,7 @@ import (
 	"image/png"
 	"io"
 	"io/fs"
+	"log/syslog"
 	mrand "math/rand"
 	"net/http"
 	"os"
@@ -164,13 +165,31 @@ type Config struct {
 }
 
 type LoggerConfig struct {
-	Level      string `yaml:"level"`
-	LogToFile  bool   `yaml:"logtofile"`
-	FilePath   string `yaml:"filepath"`
+	Level  string             `yaml:"level"`
+	File   loggerFileConfig   `yaml:"file"`
+	Syslog loggerSyslogConfig `yaml:"syslog"`
+}
+
+type loggerFileConfig struct {
+	Enable     bool   `yaml:"enable"`
+	Path       string `yaml:"path"`
 	MaxSize    int    `yaml:"maxsize"`
 	MaxBackups int    `yaml:"maxbackups"`
 	MaxAge     int    `yaml:"maxage"`
 	Compress   bool   `yaml:"compress"`
+}
+
+type loggerSyslogConfig struct {
+	Enable   bool            `yaml:"enable"`
+	Protocol string          `yaml:"protocol"`
+	Address  string          `yaml:"address"`
+	Tag      string          `yaml:"tag"`
+	Priority syslog.Priority `yaml:"priority"`
+}
+
+// SyslogLevelWriter adapte syslog.Writer pour gérer les niveaux zerolog
+type SyslogLevelWriter struct {
+	writer *syslog.Writer
 }
 
 type ListenConfig struct {
@@ -263,21 +282,21 @@ func initLogger(cfg LoggerConfig, production bool) {
 	}
 
 	// Writer pour le fichier si activé
-	if cfg.LogToFile {
-		// Créer le dossier si nécessaire
-		dir := filepath.Dir(cfg.FilePath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			log.Fatal().Err(err).Msg("Failed to create log directory")
-		}
-
-		fileWriter := &lumberjack.Logger{
-			Filename:   cfg.FilePath,
-			MaxSize:    cfg.MaxSize,
-			MaxBackups: cfg.MaxBackups,
-			MaxAge:     cfg.MaxAge,
-			Compress:   cfg.Compress,
+	if cfg.File.Enable {
+		fileWriter, err := setupFileWriter(cfg.File)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to setup file writer")
 		}
 		writers = append(writers, fileWriter)
+	}
+
+	// Wrtier syslog si activé
+	if cfg.Syslog.Enable {
+		syslogWriter, err := setupSyslogWriter(cfg.Syslog)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to setup syslog writer")
+		}
+		writers = append(writers, syslogWriter)
 	}
 
 	// Créer un multi-writer
@@ -290,15 +309,115 @@ func initLogger(cfg LoggerConfig, production bool) {
 		Caller().
 		Logger()
 
-	environnment := "production"
-	if !production {
-		environnment = "developpement"
+	environnment := "developpement"
+	if production {
+		environnment = "production"
 	}
 	log.Info().
 		Str("environment", environnment).
 		Str("level", cfg.Level).
-		Bool("log_to_file", cfg.LogToFile).
+		Bool("log_to_file", cfg.File.Enable).
+		Bool("log_to_syslog", cfg.Syslog.Enable).
 		Msg("Logger initialized")
+}
+
+// setupFileWriter configure le writer pour les fichiers
+func setupFileWriter(cfg loggerFileConfig) (io.Writer, error) {
+	// Créer le dossier si nécessaire
+	dir := filepath.Dir(cfg.Path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, err
+	}
+
+	fileWriter := &lumberjack.Logger{
+		Filename:   cfg.Path,
+		MaxSize:    cfg.MaxSize,
+		MaxBackups: cfg.MaxBackups,
+		MaxAge:     cfg.MaxAge,
+		Compress:   cfg.Compress,
+	}
+
+	return fileWriter, nil
+}
+
+// setupSyslogWriter configure le writer pour syslog
+func setupSyslogWriter(cfg loggerSyslogConfig) (io.Writer, error) {
+	// Utiliser un tag par défaut si non spécifié
+	tag := cfg.Tag
+	if tag == "" {
+		tag = "littleblog"
+	}
+	// Utiliser une priorité par défaut si non spécifiée
+	priority := cfg.Priority
+	if priority == 0 {
+		priority = syslog.LOG_INFO | syslog.LOG_LOCAL0
+	}
+
+	var writer *syslog.Writer
+	var err error
+
+	// Connexion locale ou distante
+	if cfg.Protocol == "" || cfg.Address == "" {
+		// Connexion locale (Unix socket)
+		writer, err = syslog.New(priority, tag)
+	} else {
+		// Connexion distante (TCP ou UDP)
+		writer, err = syslog.Dial(cfg.Protocol, cfg.Address, priority, tag)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to syslog: %w", err)
+	}
+
+	// Wrapper pour adapter syslog.Writer à io.Writer avec le bon niveau
+	return &SyslogLevelWriter{writer: writer}, nil
+}
+
+// Write implémente io.Writer et route vers la bonne fonction syslog selon le niveau
+func (w *SyslogLevelWriter) Write(p []byte) (n int, err error) {
+	msg := string(p)
+
+	// Parser le niveau depuis le JSON zerolog
+	level := extractLevelFromJSON(msg)
+
+	// Router vers la bonne méthode syslog selon le niveau
+	switch level {
+	case "debug":
+		return len(p), w.writer.Debug(msg)
+	case "info":
+		return len(p), w.writer.Info(msg)
+	case "warn", "warning":
+		return len(p), w.writer.Warning(msg)
+	case "error":
+		return len(p), w.writer.Err(msg)
+	case "fatal", "panic":
+		return len(p), w.writer.Crit(msg)
+	default:
+		// Par défaut, utiliser Info
+		return len(p), w.writer.Info(msg)
+	}
+}
+
+// extractLevelFromJSON extrait le niveau de log d'un message JSON zerolog
+// Format attendu: {"level":"info",...}
+func extractLevelFromJSON(msg string) string {
+	// Recherche simple du champ "level" dans le JSON
+	// Format: "level":"xxx"
+	startIdx := strings.Index(msg, `"level":"`)
+	if startIdx == -1 {
+		return ""
+	}
+
+	// Décaler après "level":"
+	startIdx += 9
+
+	// Trouver la fin (guillemet suivant)
+	endIdx := strings.Index(msg[startIdx:], `"`)
+	if endIdx == -1 {
+		return ""
+	}
+
+	return msg[startIdx : startIdx+endIdx]
 }
 
 func parseLevel(level string) zerolog.Level {
@@ -469,8 +588,13 @@ func createExampleConfig(filename string) error {
 		StaticPath: "./static",
 		Production: false,
 		Logger: LoggerConfig{
-			Level:     "info",
-			LogToFile: false,
+			Level: "info",
+			File: loggerFileConfig{
+				Enable: false,
+			},
+			Syslog: loggerSyslogConfig{
+				Enable: false,
+			},
 		},
 		Listen: ListenConfig{
 			Website: "0.0.0.0:8080",

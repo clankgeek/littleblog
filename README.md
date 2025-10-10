@@ -28,6 +28,7 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
   - API RESTful (json)
   - /metrics pour Promotheus avec port dédié
   - Logs zerolog et gestion des rotations lumberjack
+  - Emission vers Syslog
   - Compression gzip
 
 - Frontend
@@ -81,12 +82,19 @@ staticpath: "./static"
 production: false #false pour la preprod, true en production
 logger:
   level: debug #"debug", "info", "warn", "error"
-  logtofile: true
-  filepath: ./littleblog.log
-  maxsize: 100 #Taille max du fichier en Mo
-  maxbackups: 1 #Nombre max de fichiers de backup
-  maxAge: 30 #Nombre de jours avant suppression
-  compress: true #Compresser les anciens logs
+  file:
+    enable: true # true pour activer le log en fichier
+    path: ./littleblog.log
+    maxsize: 100 #Taille max du fichier en Mo
+    maxbackups: 1 #Nombre max de fichiers de backup
+    maxAge: 30 #Nombre de jours avant suppression
+    compress: true #Compresser les anciens logs
+  syslog:
+    enable: false # true pour activer l'émission vers un serveur syslog
+    protocol: tcp # "tcp", "udp", vide pour unix socket
+    address: 1.2.3.4 # addresse ip du serveur syslog, vide pour unix socket
+    tag: monBlogPerso
+    priority: 6 # LOG_INFO
 listen:
   website: 0.0.0.0:8080
   metrics: 0.0.0.0:8090 #enlever pour désactiver, promotheus format
