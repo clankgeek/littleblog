@@ -80,26 +80,29 @@
                 </div>
             </div>
         </header>
+        <div class="article-body" x-data="{imageSrc: '', hasImage: false}" x-init="const imageUrl = $el.dataset.image;if (imageUrl) {imageSrc = imageUrl; hasImage = true;}">
+                <div class="article-content">
+                    <p class="article-excerpt" data-excerpt></p>
+                    <div class="article-image" x-show="hasImage">
+                        <img :src="imageSrc" alt="Article image">
+                    </div>
+                <div class="article-tags" data-tags></div>
 
-        <div class="article-content">
-            <p class="article-excerpt" data-excerpt></p>
-            
-            <div class="article-tags" data-tags></div>
-
-            <div class="article-actions">
-                <a href="" class="read-more" data-readmore>
-                    Lire la suite →
-                </a>
-                <div class="article-stats">
-                    <div class="stat">
-                        <span><img src="/files/img/ballon.svg" class="icon"></span>
-                        <span data-comments>0</span>
+                <div class="article-actions">
+                    <a href="" class="read-more" data-readmore>
+                        Lire la suite →
+                    </a>
+                    <div class="article-stats">
+                        <div class="stat">
+                            <span><img src="/files/img/ballon.svg" class="icon"></span>
+                            <span data-comments>0</span>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="admin-actions" data-admin style="display: none;">
-                <a href="" class="btn-admin" data-edit><img src="/files/img/pencil.svg" class="icon"> Éditer</a>
+                <div class="admin-actions" data-admin style="display: none;">
+                    <a href="" class="btn-admin" data-edit><img src="/files/img/pencil.svg" class="icon"> Éditer</a>
+                </div>
             </div>
         </div>
     </article>
@@ -215,6 +218,10 @@ function infiniteScroll(category, isAuthenticated) {
             article.querySelector('[data-date]').textContent = this.formatDate(post.created_at);
             article.querySelector('[data-excerpt]').textContent = post.excerpt || '';
             article.querySelector('[data-comments]').textContent = (post.comments || []).length;
+            
+            if (post.image) {
+                article.querySelector('.article-body').dataset.image = post.image;
+            }
             
             const readMore = article.querySelector('[data-readmore]');
             readMore.href = `/post/${post.ID || post.id}`;

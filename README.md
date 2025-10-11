@@ -6,6 +6,7 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 
 - Infinity scroll sur la liste des articles
 - Articles avec contenu Markdown
+- Extrait automatique pour l'index en texte brut, avec première image de l'article
 - Commentaires (ajout protégé par CAPTCHA)
 - Recherche en temps réel
 - Administration des articles
