@@ -22,11 +22,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/andskur/argon2-hashing"
 	"github.com/gin-contrib/gzip"
@@ -92,6 +94,7 @@ type Post struct {
 	Content     string        `json:"content" gorm:"type:text;not null"`
 	ContentHTML template.HTML `json:"content_html" gorm:"-"`
 	Excerpt     string        `json:"excerpt"`
+	FirstImage  string        `json:"image" gorm:"type:text"`
 	Author      string        `json:"author" gorm:"not null"`
 	CreatedAt   time.Time     `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt   time.Time     `json:"updated_at" gorm:"autoUpdateTime"`
@@ -247,6 +250,89 @@ type Color struct {
 type RedisStore struct {
 	client     *redis.Client
 	expiration time.Duration
+}
+
+// Remplir Excerpt calculé a partir de content
+func (p *Post) FillExcerpt() error {
+	// Générer l'excerpt texte si vide
+	if p.Content != "" {
+		if p.Excerpt == "" {
+			p.Excerpt = ExtractExcerpt(p.Content, 500)
+		}
+		p.FirstImage = ExtractFirstImage(p.Content)
+	}
+	return nil
+}
+
+// ExtractExcerpt génère automatiquement un résumé depuis le contenu Markdown
+func ExtractExcerpt(markdown string, maxLength int) string {
+	if markdown == "" {
+		return ""
+	}
+
+	// Supprimer les images
+	reImage := regexp.MustCompile(`!\[.*?\]\(.*?\)`)
+	text := reImage.ReplaceAllString(markdown, "")
+
+	// Supprimer les blocs de code
+	reCodeBlock := regexp.MustCompile("(?s)```.*?```")
+	text = reCodeBlock.ReplaceAllString(text, "")
+
+	// Supprimer les titres markdown (garder le texte)
+	reHeaders := regexp.MustCompile(`(?m)^#{1,6}\s+(.*)$`)
+	text = reHeaders.ReplaceAllString(text, "$1")
+
+	// Supprimer les liens mais garder le texte
+	reLinks := regexp.MustCompile(`\[([^\]]+)\]\([^\)]+\)`)
+	text = reLinks.ReplaceAllString(text, "$1")
+
+	// Supprimer le formatage markdown
+	text = regexp.MustCompile(`\*\*([^\*]+)\*\*`).ReplaceAllString(text, "$1") // Gras
+	text = regexp.MustCompile(`\*([^\*]+)\*`).ReplaceAllString(text, "$1")     // Italique
+	text = regexp.MustCompile("`([^`]+)`").ReplaceAllString(text, "$1")        // Code inline
+	text = regexp.MustCompile(`~~([^~]+)~~`).ReplaceAllString(text, "$1")      // Barré
+
+	// Nettoyer les espaces
+	text = strings.TrimSpace(text)
+	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
+
+	// Tronquer intelligemment
+	if utf8.RuneCountInString(text) > maxLength {
+		runes := []rune(text)
+
+		cutPoint := maxLength
+		for i := maxLength - 1; i >= maxLength-50 && i >= 0; i-- {
+			if runes[i] == ' ' || runes[i] == '.' || runes[i] == ',' {
+				cutPoint = i
+				break
+			}
+		}
+
+		text = strings.TrimSpace(string(runes[:cutPoint])) + "..."
+	}
+
+	return text
+}
+
+// ExtractFirstImage extrait l'URL de la première image du Markdown
+// Exemple: ![monimage.jpg](/static/uploads/1759683627_d4hhlyrc.jpg)
+func ExtractFirstImage(markdown string) string {
+	if markdown == "" {
+		return ""
+	}
+
+	// Pattern pour les images markdown: ![alt](url)
+	reImage := regexp.MustCompile(`!\[[^\]]*\]\(([^)]+)\)`)
+	matches := reImage.FindStringSubmatch(markdown)
+
+	if len(matches) > 1 {
+		imageURL := strings.TrimSpace(matches[1])
+		// Nettoyer l'URL (supprimer les guillemets et espaces éventuels)
+		imageURL = strings.Trim(imageURL, `"' `)
+		return imageURL
+	}
+
+	return ""
 }
 
 // InitLogger configure le logger global Zerolog
@@ -1936,6 +2022,8 @@ func createPostHandler(c *gin.Context) {
 		Category: slugify(req.Category),
 	}
 
+	post.FillExcerpt()
+
 	if post.Title == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Le titre ne peut pas etre vide"})
 		return
@@ -1980,6 +2068,7 @@ func updatePostHandler(c *gin.Context) {
 	post.Excerpt = strings.TrimSpace(req.Excerpt)
 	post.TagsList = req.Tags
 	post.Category = slugify(req.Category)
+	post.FillExcerpt()
 
 	result = db.Save(&post)
 	if result.Error != nil {

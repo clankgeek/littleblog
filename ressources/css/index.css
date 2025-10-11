@@ -311,6 +311,7 @@
 
 .skeleton-content {
     padding: 30px;
+    flex:1;
 }
 
 .skeleton-text {
@@ -322,6 +323,22 @@
 
 .skeleton-text:last-child {
     width: 70%;
+}
+
+.article-body {
+    display: flex;
+    gap: 20px;
+    align-items: center; 
+}
+
+.article-image {
+    flex-shrink: 0;
+    width: 150px;
+}
+
+.article-image img {
+    width: 100%;
+    height: auto;
 }
 
 @media (max-width: 768px) {

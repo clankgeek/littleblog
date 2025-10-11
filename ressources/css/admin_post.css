@@ -66,7 +66,7 @@
 }
 
 textarea.form-control {
-    min-height: 400px;
+    min-height: 500px;
     resize: vertical;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Cascadia Code', monospace;
     font-size: 0.95em;
