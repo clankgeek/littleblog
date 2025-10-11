@@ -54,14 +54,6 @@
         <!-- Actions avec Alpine.js -->
         <div x-data="postInteractions({{ .post.ID }})">
             <div class="actions">
-                <button @click="toggleLike" 
-                        :class="{ 'liked': isLiked }"
-                        class="btn btn-primary btn-like">
-                    <span x-show="!isLiked"><img src="/files/img/whiteheart.svg" class="icon"></span>
-                    <span x-show="isLiked"><img src="/files/img/redheart.svg" class="icon"></span>
-                    <span x-text="likeCount + ' likes'"></span>
-                </button>
-                
                 <button @click="showComments = !showComments" 
                         class="btn btn-outline">
                     <span><img src="/files/img/ballon.svg" class="icon"></span>
@@ -200,7 +192,6 @@ document.addEventListener('alpine:init', () => {
 
         async init() {
             await this.loadComments();
-            await this.loadLikeStatus();
         },
 
         async deleteComment(commentId) {
@@ -252,19 +243,6 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async loadLikeStatus() {
-            try {
-                const response = await fetch(`/api/posts/${this.postId}/like-status`);
-                if (response.ok) {
-                    const data = await response.json();
-                    this.isLiked = data.liked;
-                    this.likeCount = data.like_count;
-                }
-            } catch (error) {
-                console.error('Erreur chargement likes:', error);
-            }
-        },
-
         async addComment() {
             if (!this.newComment.author.trim() || !this.newComment.content.trim() || !this.newComment.captchaAnswer.trim()) {
                 window.showNotification('Veuillez remplir tous les champs', 'error');
@@ -296,23 +274,6 @@ document.addEventListener('alpine:init', () => {
                 window.showNotification('Erreur lors de l\'ajout du commentaire', 'error');
             } finally {
                 this.loading = false;
-            }
-        },
-
-        async toggleLike() {
-            try {
-                const response = await fetch(`/api/posts/${this.postId}/like`, {
-                    method: 'POST'
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    this.isLiked = data.liked;
-                    this.likeCount = data.like_count;
-                }
-            } catch (error) {
-                console.error('Erreur like:', error);
-                window.showNotification('Erreur lors du like', 'error');
             }
         },
 

@@ -6,7 +6,7 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 
 - Infinity scroll sur la liste des articles
 - Articles avec contenu Markdown
-- Commentaires
+- Commentaires (ajout protégé par CAPTCHA)
 - Recherche en temps réel
 - Administration des articles
 - Upload d'images
@@ -70,14 +70,14 @@ trustedproxies:
   - 192.168.1.2
 trustedplatform: #cloudflare, google, flyio, or header name, example X-CDN-Client-IP
 database:
-  redis: #localhost:6379, pour le capcha, si vide, utilisation store interne a go.
+  redis: #localhost:6379, pour le CAPTCHA, si vide, utilisation store interne à go.
   db: sqlite3
   path: ./blog.db
   #db: mysql
   #dsn: mon_utilisateur:motdepasse_utilisateur@tcp(127.0.0.1:3306)/ma_base?charset=utf8mb4&parseTime=True&loc=Local
 user:
   login: admin
-  pass: admin1234
+  pass: admin1234 # mot de passe sera hashé en Argon2i au premier démarrage
 staticpath: "./static"
 production: false #false pour la preprod, true en production
 logger:
@@ -112,6 +112,7 @@ menu:
   docker compose up
 ```
 
-Dans grafana ajouter le Data Sources Promotheus, avec la connection à http://prometheus:9090
+Dans grafana http://127.0.0.1:3000 ajouter le Data Sources Promotheus, avec la connection à http://prometheus:9090
 
 Puis dans dashboard importer grafana.json.
+

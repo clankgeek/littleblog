@@ -95,7 +95,6 @@ type Post struct {
 	Author      string        `json:"author" gorm:"not null"`
 	CreatedAt   time.Time     `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt   time.Time     `json:"updated_at" gorm:"autoUpdateTime"`
-	LikeCount   int           `json:"like_count" gorm:"default:0"`
 	Tags        string        `json:"-" gorm:"type:text"`
 	Category    string        `json:"category" gorm:"type:text"`
 	TagsList    []string      `json:"tags" gorm:"-"`
@@ -110,13 +109,6 @@ type Comment struct {
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 	Post      Post      `json:"-" gorm:"foreignKey:PostID"`
-}
-
-type Like struct {
-	ID     uint   `gorm:"primaryKey"`
-	PostID uint   `gorm:"not null;index"`
-	UserIP string `gorm:"not null;index"`
-	Post   Post   `gorm:"foreignKey:PostID"`
 }
 
 // Requests structs
@@ -812,7 +804,7 @@ func initDatabase() {
 		LogFatal(err, "Erreur connexion base de données:")
 	}
 
-	err = db.AutoMigrate(&Post{}, &Comment{}, &Like{})
+	err = db.AutoMigrate(&Post{}, &Comment{})
 	if err != nil {
 		LogFatal(err, "Erreur migration:")
 	}
@@ -870,11 +862,10 @@ Ceci est le premier article avec le moteur de blog **littleblog**, qui utilise u
   - **N'utilise pas nodejs**
 
 N'hésitez pas à laisser un commentaire !`,
-			Excerpt:   "Premier article de présentation du blog avec les technologies utilisées.",
-			Author:    "Admin",
-			LikeCount: 5,
-			TagsList:  []string{"accueil", "présentation"},
-			Category:  getFirstMenuKey(configuration),
+			Excerpt:  "Premier article de présentation du blog avec les technologies utilisées.",
+			Author:   "Admin",
+			TagsList: []string{"accueil", "présentation"},
+			Category: getFirstMenuKey(configuration),
 		},
 	}
 
@@ -1479,8 +1470,6 @@ func setRoutes(r *gin.Engine) {
 		api.GET("/posts/:id/comments", getCommentsAPI)
 		api.POST("/posts/:id/comments", addCommentAPI)
 		api.DELETE("/comments/:id", authRequired(), deleteCommentAPI)
-		api.GET("/posts/:id/like-status", getLikeStatusAPI)
-		api.POST("/posts/:id/like", toggleLikeAPI)
 		api.GET("/search", searchPostsAPI)
 	}
 
@@ -1685,13 +1674,11 @@ func adminDashboardHandler(c *gin.Context) {
 	var stats struct {
 		TotalPosts    int64
 		TotalComments int64
-		TotalLikes    int64
 		RecentPosts   []Post
 	}
 
 	db.Model(&Post{}).Count(&stats.TotalPosts)
 	db.Model(&Comment{}).Count(&stats.TotalComments)
-	db.Model(&Like{}).Count(&stats.TotalLikes)
 	db.Order("created_at desc").Limit(5).Find(&stats.RecentPosts)
 
 	session := sessions.Default(c)
@@ -2011,20 +1998,13 @@ func deletePostHandler(c *gin.Context) {
 		return
 	}
 
-	// Supprimer dans une transaction (commentaires et likes aussi)
+	// Supprimer dans une transaction (commentaires)
 	tx := db.Begin()
 
 	// Supprimer les commentaires
 	if err := tx.Where("post_id = ?", uint(id)).Delete(&Comment{}).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur suppression commentaires"})
-		return
-	}
-
-	// Supprimer les likes
-	if err := tx.Where("post_id = ?", uint(id)).Delete(&Like{}).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur suppression likes"})
 		return
 	}
 
@@ -2287,105 +2267,6 @@ func addCommentAPI(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, comment)
-}
-
-func getLikeStatusAPI(c *gin.Context) {
-	idStr := c.Param("id")
-	postID, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalide"})
-		return
-	}
-
-	var post Post
-	result := db.First(&post, uint(postID))
-	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Article non trouvé"})
-		return
-	}
-
-	userIP := c.ClientIP()
-	var like Like
-	isLiked := db.Where("post_id = ? AND user_ip = ?", uint(postID), userIP).First(&like).Error == nil
-
-	c.JSON(http.StatusOK, gin.H{
-		"liked":      isLiked,
-		"like_count": post.LikeCount,
-	})
-}
-
-func toggleLikeAPI(c *gin.Context) {
-	idStr := c.Param("id")
-	postID, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalide"})
-		return
-	}
-
-	userIP := c.ClientIP()
-
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	var post Post
-	result := tx.First(&post, uint(postID))
-	if result.Error != nil {
-		tx.Rollback()
-		c.JSON(http.StatusNotFound, gin.H{"error": "Article non trouvé"})
-		return
-	}
-
-	var existingLike Like
-	likeExists := tx.Where("post_id = ? AND user_ip = ?", uint(postID), userIP).First(&existingLike).Error == nil
-
-	if likeExists {
-		if err := tx.Delete(&existingLike).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur suppression like"})
-			return
-		}
-
-		if err := tx.Model(&post).Update("like_count", gorm.Expr("like_count - 1")).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur mise à jour compteur"})
-			return
-		}
-
-		post.LikeCount--
-	} else {
-		newLike := Like{
-			PostID: uint(postID),
-			UserIP: userIP,
-		}
-
-		if err := tx.Create(&newLike).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur création like"})
-			return
-		}
-
-		if err := tx.Model(&post).Update("like_count", gorm.Expr("like_count + 1")).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur mise à jour compteur"})
-			return
-		}
-
-		post.LikeCount++
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur validation transaction"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"liked":      !likeExists,
-		"like_count": post.LikeCount,
-	})
 }
 
 func searchPostsAPI(c *gin.Context) {

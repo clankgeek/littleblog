@@ -37,11 +37,6 @@
             <div class="stat-label">Commentaires</div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon"><img src="/files/img/redheart.svg" class="icon"></div>
-            <div class="stat-number">{{ .stats.TotalLikes }}</div>
-            <div class="stat-label">Likes totaux</div>
-        </div>
-        <div class="stat-card">
             <div class="stat-icon"><img src="/files/img/stats.svg" class="icon"></div>
             <div class="stat-number">{{ len .stats.RecentPosts }}</div>
             <div class="stat-label">Articles récents</div>
@@ -89,7 +84,6 @@
                     <div class="post-meta">
                         <span><img src="/files/img/bust.svg" class="icon"> {{ .Author }}</span>
                         <span><img src="/files/img/calendar.svg" class="icon"> {{ .CreatedAt.Format "02/01/2006 à 15:04" }}</span>
-                        <span><img src="/files/img/redheart.svg" class="icon"> {{ .LikeCount }} likes</span>
                         <span><img src="/files/img/ballon.svg" class="icon"> {{ len .Comments }} commentaires</span>
                     </div>
                 </div>

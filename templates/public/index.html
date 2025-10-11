@@ -92,10 +92,6 @@
                 </a>
                 <div class="article-stats">
                     <div class="stat">
-                        <span><img src="/files/img/redheart.svg" class="icon"></span>
-                        <span data-likes>0</span>
-                    </div>
-                    <div class="stat">
                         <span><img src="/files/img/ballon.svg" class="icon"></span>
                         <span data-comments>0</span>
                     </div>
@@ -218,7 +214,6 @@ function infiniteScroll(category, isAuthenticated) {
             article.querySelector('[data-author]').textContent = post.author || 'Anonyme';
             article.querySelector('[data-date]').textContent = this.formatDate(post.created_at);
             article.querySelector('[data-excerpt]').textContent = post.excerpt || '';
-            article.querySelector('[data-likes]').textContent = post.like_count || 0;
             article.querySelector('[data-comments]').textContent = (post.comments || []).length;
             
             const readMore = article.querySelector('[data-readmore]');
