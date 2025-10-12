@@ -539,7 +539,7 @@ func LogInfo(msg string) *zerolog.Event {
 
 // Info logue avec printf
 func LogPrintf(format string, a ...any) *zerolog.Event {
-	return log.Info().Str("msg", fmt.Sprintf(format, a))
+	return log.Info().Str("msg", fmt.Sprintf(format, a...))
 }
 
 // Warn logue un avertissement
@@ -611,15 +611,23 @@ func newCaptcha(host string) *captchas {
 	}
 }
 
-func (cap *captchas) generateCaptcha(c *gin.Context) {
+func (cap *captchas) captchaHandler(c *gin.Context) {
+	data, err := cap.generateCaptcha(configuration.Production)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, data)
+}
+
+func (cap *captchas) generateCaptcha(production bool) (map[string]any, error) {
 	captcha := base64Captcha.NewCaptcha(cap.driver, cap.store)
 
 	id, b64s, answer, err := captcha.Generate()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Erreur lors de la génération du CAPTCHA",
-		})
-		return
+		return nil, fmt.Errorf("erreur lors de la génération du CAPTCHA")
 	}
 
 	data := gin.H{
@@ -628,12 +636,12 @@ func (cap *captchas) generateCaptcha(c *gin.Context) {
 		"answer":     "",
 	}
 
-	if !configuration.Production {
+	if !production {
 		fmt.Printf("CAPTCHA généré - ID: %s, Réponse: %s\n", id, answer)
 		data["answer"] = answer
 	}
 
-	c.JSON(http.StatusOK, data)
+	return data, nil
 }
 
 func (cap *captchas) verifyCaptcha(captchaID string, captchaAnswer string) error {
@@ -1228,7 +1236,7 @@ func middlerwareLogger() gin.HandlerFunc {
 			for _, err := range c.Errors {
 				log.Error().
 					Err(err.Err).
-					Str("type", string(err.Type)).
+					Str("type", strconv.FormatUint(uint64(err.Type), 10)).
 					Msg("Request error")
 			}
 		}
@@ -1530,7 +1538,7 @@ func setRoutes(r *gin.Engine) {
 	r.GET("/", indexHandler)
 	r.GET("/:category", indexHandler)
 	r.GET("/post/:id", postHandler)
-	r.GET("/files/captcha", captcha.generateCaptcha)
+	r.GET("/files/captcha", captcha.captchaHandler)
 
 	// Routes d'authentification
 	r.GET("/admin/login", loginPageHandler)

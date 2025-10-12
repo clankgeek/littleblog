@@ -37,7 +37,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	})
 	require.NoError(t, err)
 
-	err = testDB.AutoMigrate(&Post{}, &Comment{}, &Like{})
+	err = testDB.AutoMigrate(&Post{}, &Comment{})
 	require.NoError(t, err)
 
 	return testDB
@@ -49,7 +49,7 @@ func setupTestDBBench(t *testing.B) *gorm.DB {
 	})
 	require.NoError(t, err)
 
-	err = testDB.AutoMigrate(&Post{}, &Comment{}, &Like{})
+	err = testDB.AutoMigrate(&Post{}, &Comment{})
 	require.NoError(t, err)
 
 	return testDB
@@ -67,7 +67,7 @@ func setupTestRouter() *gin.Engine {
 }
 
 func setupTestConfig() *Config {
-	return &Config{
+	c := &Config{
 		SiteName:    "Test Blog",
 		Description: "Test Description",
 		Database: DatabaseConfig{
@@ -79,17 +79,20 @@ func setupTestConfig() *Config {
 			Hash:  "$argon2id$v=19$m=65536,t=3,p=2$abcdefghijklmnop$0123456789abcdef0123456789abcdef",
 		},
 		Production: false,
+		Logger:     LoggerConfig{},
 	}
+	initLogger(c.Logger, false)
+
+	return c
 }
 
 func createTestPost(db *gorm.DB) *Post {
 	post := &Post{
-		Title:     "Test Post",
-		Content:   "Test Content",
-		Excerpt:   "Test Excerpt",
-		Author:    "Test Author",
-		LikeCount: 5,
-		TagsList:  []string{"test", "golang"},
+		Title:    "Test Post",
+		Content:  "Test Content",
+		Excerpt:  "Test Excerpt",
+		Author:   "Test Author",
+		TagsList: []string{"test", "golang"},
 	}
 	db.Create(post)
 	return post
@@ -248,9 +251,15 @@ func TestAddCommentAPI(t *testing.T) {
 
 	r.POST("/api/posts/:id/comments", addCommentAPI)
 
+	captcha = newCaptcha("")
+	data, err := captcha.generateCaptcha(false)
+	assert.Equal(t, nil, err)
+
 	comment := CreateCommentRequest{
-		Author:  "Test User",
-		Content: "Great post!",
+		Author:        "Test User",
+		Content:       "Great post!",
+		CaptchaID:     data["captcha_id"].(string),
+		CaptchaAnswer: data["answer"].(string),
 	}
 
 	body, _ := json.Marshal(comment)
@@ -262,44 +271,11 @@ func TestAddCommentAPI(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, w.Code)
 
 	var createdComment Comment
-	err := json.Unmarshal(w.Body.Bytes(), &createdComment)
+	err = json.Unmarshal(w.Body.Bytes(), &createdComment)
 	assert.NoError(t, err)
 	assert.Equal(t, comment.Author, createdComment.Author)
 	assert.Equal(t, comment.Content, createdComment.Content)
 	assert.Equal(t, post.ID, createdComment.PostID)
-}
-
-func TestToggleLikeAPI(t *testing.T) {
-	testDB := setupTestDB(t)
-	db = testDB
-	r := setupTestRouter()
-
-	post := createTestPost(testDB)
-	initialLikes := post.LikeCount
-
-	r.POST("/api/posts/:id/like", toggleLikeAPI)
-
-	// Premier like
-	req := httptest.NewRequest("POST", fmt.Sprintf("/api/posts/%d/like", post.ID), nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.True(t, response["liked"].(bool))
-	assert.Equal(t, float64(initialLikes+1), response["like_count"])
-
-	// Unlike (même IP)
-	req = httptest.NewRequest("POST", fmt.Sprintf("/api/posts/%d/like", post.ID), nil)
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.False(t, response["liked"].(bool))
-	assert.Equal(t, float64(initialLikes), response["like_count"])
 }
 
 func TestSearchPostsAPI(t *testing.T) {
@@ -526,9 +502,8 @@ func TestDeletePostHandler(t *testing.T) {
 
 	post := createTestPost(testDB)
 
-	// Ajouter des commentaires et likes
+	// Ajouter des commentaires
 	testDB.Create(&Comment{PostID: post.ID, Author: "User", Content: "Comment"})
-	testDB.Create(&Like{PostID: post.ID, UserIP: "127.0.0.1"})
 
 	r.DELETE("/admin/posts/:id", deletePostHandler)
 
@@ -544,9 +519,6 @@ func TestDeletePostHandler(t *testing.T) {
 	assert.Equal(t, int64(0), count)
 
 	testDB.Model(&Comment{}).Where("post_id = ?", post.ID).Count(&count)
-	assert.Equal(t, int64(0), count)
-
-	testDB.Model(&Like{}).Where("post_id = ?", post.ID).Count(&count)
 	assert.Equal(t, int64(0), count)
 }
 
@@ -658,31 +630,6 @@ func TestGetCommentsAPI(t *testing.T) {
 	assert.Equal(t, "User2", comments[1].Author)
 }
 
-func TestGetLikeStatusAPI(t *testing.T) {
-	testDB := setupTestDB(t)
-	db = testDB
-	r := setupTestRouter()
-
-	post := createTestPost(testDB)
-
-	// Créer un like
-	testDB.Create(&Like{PostID: post.ID, UserIP: "127.0.0.1"})
-
-	r.GET("/api/posts/:id/like-status", getLikeStatusAPI)
-
-	req := httptest.NewRequest("GET", fmt.Sprintf("/api/posts/%d/like-status", post.ID), nil)
-	req.RemoteAddr = "127.0.0.1:1234"
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.True(t, response["liked"].(bool))
-	assert.Equal(t, float64(post.LikeCount), response["like_count"])
-}
-
 // ============= Tests d'intégration =============
 
 func TestPostWorkflow(t *testing.T) {
@@ -695,7 +642,6 @@ func TestPostWorkflow(t *testing.T) {
 	r.POST("/admin/posts", createPostHandler)
 	r.PUT("/admin/posts/:id", updatePostHandler)
 	r.POST("/api/posts/:id/comments", addCommentAPI)
-	r.POST("/api/posts/:id/like", toggleLikeAPI)
 	r.DELETE("/admin/posts/:id", deletePostHandler)
 
 	// 1. Créer un post
@@ -733,10 +679,16 @@ func TestPostWorkflow(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
+	captcha = newCaptcha("")
+	data, err := captcha.generateCaptcha(false)
+	assert.Equal(t, nil, err)
+
 	// 3. Ajouter un commentaire
 	commentReq := CreateCommentRequest{
-		Author:  "Commenter",
-		Content: "Great post!",
+		Author:        "Commenter",
+		Content:       "Great post!",
+		CaptchaID:     data["captcha_id"].(string),
+		CaptchaAnswer: data["answer"].(string),
 	}
 
 	body, _ = json.Marshal(commentReq)
@@ -747,19 +699,11 @@ func TestPostWorkflow(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, w.Code)
 
-	// 4. Liker le post
-	req = httptest.NewRequest("POST", fmt.Sprintf("/api/posts/%d/like", postID), nil)
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
 	// 5. Vérifier l'état final
 	var post Post
 	testDB.Preload("Comments").First(&post, postID)
 	assert.Equal(t, "Updated Integration Test", post.Title)
 	assert.Len(t, post.Comments, 1)
-	assert.Equal(t, 1, post.LikeCount)
 
 	// 6. Supprimer le post
 	req = httptest.NewRequest("DELETE", fmt.Sprintf("/admin/posts/%d", postID), nil)
@@ -937,9 +881,15 @@ func TestInputValidation(t *testing.T) {
 
 		r.POST("/api/posts/:id/comments", addCommentAPI)
 
+		captcha = newCaptcha("")
+		data, err := captcha.generateCaptcha(false)
+		assert.Equal(t, nil, err)
+
 		comment := CreateCommentRequest{
-			Author:  "<script>alert('XSS')</script>",
-			Content: "<img src=x onerror=alert('XSS')>",
+			Author:        "<script>alert('XSS')</script>",
+			Content:       "<img src=x onerror=alert('XSS')>",
+			CaptchaID:     data["captcha_id"].(string),
+			CaptchaAnswer: data["answer"].(string),
 		}
 
 		body, _ := json.Marshal(comment)
@@ -1152,7 +1102,7 @@ func TestDatabaseMigration(t *testing.T) {
 	testDB := setupTestDB(t)
 
 	// Vérifier que les tables existent avec la bonne requête SQLite
-	tables := []string{"posts", "comments", "likes"}
+	tables := []string{"posts", "comments"}
 
 	for _, tableName := range tables {
 		var name string
@@ -1167,8 +1117,8 @@ func TestDatabaseMigration(t *testing.T) {
 
 	// Vérifier aussi avec une approche alternative
 	var tableCount int64
-	testDB.Raw("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('posts', 'comments', 'likes')").Scan(&tableCount)
-	assert.Equal(t, int64(3), tableCount, "Should have exactly 3 tables")
+	testDB.Raw("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('posts', 'comments')").Scan(&tableCount)
+	assert.Equal(t, int64(2), tableCount, "Should have exactly 3 tables")
 
 	// Vérifier que les colonnes importantes existent
 	// Pour SQLite, on peut utiliser PRAGMA
