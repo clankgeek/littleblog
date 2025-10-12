@@ -3,9 +3,7 @@
 <html lang="fr">
 <head>
     {{ template "head" . }}
-    <style>
-        {{.theme | safeCSS}}
-    </style>
+    <link rel="stylesheet" href="/files/theme.css?{{ .BuildID }}">
     <link rel="stylesheet" href="/files/css/header.css?{{ .BuildID }}">
     <link rel="stylesheet" href="/files/css/common.css?{{ .BuildID }}">
     <link rel="stylesheet" href="/files/css/footer.css?{{ .BuildID }}">

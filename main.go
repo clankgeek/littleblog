@@ -1523,6 +1523,9 @@ func setRoutes(r *gin.Engine) {
 	r.GET("/files/js/*.js", ServeMinifiedStatic(m))
 	r.GET("/files/img/*.svg", ServeMinifiedStatic(m))
 
+	// theme
+	r.GET("/files/theme.css", themeHandler)
+
 	// Routes publiques
 	r.GET("/", indexHandler)
 	r.GET("/:category", indexHandler)
@@ -1619,6 +1622,14 @@ func main() {
 
 // ============= HANDLERS PUBLICS =============
 
+func themeHandler(c *gin.Context) {
+	c.Header("Content-Type", "text/css; charset=utf-8")
+	c.Header("Cache-Control", "public, max-age=3600")
+	re := regexp.MustCompile("[^a-zA-Z0-9]+")
+	c.Header("ETag", BuildID+re.ReplaceAllString(configuration.Theme, ""))
+	c.Data(http.StatusOK, "text/css", []byte(theme))
+}
+
 func indexHandler(c *gin.Context) {
 	session := sessions.Default(c)
 	isAdmin := session.Get("user_id") != nil
@@ -1637,7 +1648,6 @@ func indexHandler(c *gin.Context) {
 		"showSearch":      true,
 		"currentYear":     time.Now().Year(),
 		"ogType":          "website",
-		"theme":           theme,
 		"version":         VERSION,
 		"category":        category,
 		"menu":            GenerateMenu(configuration.Menu, category),
@@ -1654,7 +1664,6 @@ func pageNotFound(c *gin.Context, title string) {
 		"siteName":    configuration.SiteName,
 		"description": "La page que vous recherchez n'existe pas.",
 		"currentYear": time.Now().Year(),
-		"theme":       theme,
 		"version":     VERSION,
 		"BuildID":     BuildID,
 		"menu":        GenerateMenu(configuration.Menu, ""),
@@ -1689,7 +1698,6 @@ func postHandler(c *gin.Context) {
 		"currentYear":     time.Now().Year(),
 		"ogTitle":         post.Title,
 		"ogType":          "article",
-		"theme":           theme,
 		"version":         VERSION,
 		"menu":            GenerateMenu(configuration.Menu, post.Category),
 		"BuildID":         BuildID,
@@ -1709,7 +1717,6 @@ func loginPageHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "admin_login", gin.H{
 		"title":    "Connexion Admin",
 		"siteName": configuration.SiteName,
-		"theme":    theme,
 		"version":  VERSION,
 		"BuildID":  BuildID,
 	})
@@ -1780,7 +1787,6 @@ func adminDashboardHandler(c *gin.Context) {
 		"stats":       stats,
 		"currentYear": time.Now().Year(),
 		"isAdmin":     true,
-		"theme":       theme,
 		"version":     VERSION,
 		"BuildID":     BuildID,
 		"memories":    getMemUsage(),
@@ -1920,7 +1926,6 @@ func adminPostsHandler(c *gin.Context) {
 		"posts":       posts,
 		"currentYear": time.Now().Year(),
 		"isAdmin":     true,
-		"theme":       theme,
 		"version":     VERSION,
 		"BuildID":     BuildID,
 		"memories":    getMemUsage(),
@@ -1950,7 +1955,6 @@ func newPostPageHandler(c *gin.Context) {
 		"isEdit":          false,
 		"currentYear":     time.Now().Year(),
 		"isAdmin":         true,
-		"theme":           theme,
 		"version":         VERSION,
 		"optionsCategory": getOptionsCategory(),
 		"BuildID":         BuildID,
@@ -1987,7 +1991,6 @@ func editPostPageHandler(c *gin.Context) {
 		"isEdit":          true,
 		"currentYear":     time.Now().Year(),
 		"isAdmin":         true,
-		"theme":           theme,
 		"version":         VERSION,
 		"optionsCategory": getOptionsCategory(),
 		"BuildID":         BuildID,
