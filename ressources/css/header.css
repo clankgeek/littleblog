@@ -1,3 +1,18 @@
+.logoimg {
+  height: 60px; /* ajuste selon la taille souhaitée */
+  width: auto;
+  margin-right: 5px; /* pas d’espace après le logo */
+  display: block;
+}
+
+.header-logo {
+    box-sizing: content-box;
+    display: flex;
+    float: none;
+    position: static;
+    z-index: auto;
+}
+
 .header {
     background: white;
     border-bottom: 1px solid var(--border-color);
@@ -59,6 +74,7 @@
 }
 
 .logo {
+    text-align: left;
     font-size: 1.8em;
     font-weight: bold;
     text-decoration: none;

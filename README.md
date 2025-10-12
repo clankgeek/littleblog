@@ -66,10 +66,11 @@ Fichier sample `littleblog.yaml` :
 ```yaml
 sitename: Mon Blog
 description: Mon blog perso
-theme: blue
+logoimg: /static/linux.png #logo optionnel, apparait a gauche du sitename
+theme: blue # blue, red, green, yellow, purple, cyan, orange, pink, gray, black, ou code couleur exemple: #000000
 trustedproxies:
-  - 192.168.1.2
-trustedplatform: #cloudflare, google, flyio, or header name, example X-CDN-Client-IP
+  - 192.168.1.2 # ip du reverse proxy authorisé en entrée
+trustedplatform: #cloudflare, google, flyio, ou header name exemple X-CDN-Client-IP
 database:
   redis: #localhost:6379, pour le CAPTCHA, si vide, utilisation store interne à go.
   db: sqlite3
@@ -92,7 +93,7 @@ logger:
     compress: true #Compresser les anciens logs
   syslog:
     enable: false # true pour activer l'émission vers un serveur syslog
-    protocol: tcp # "tcp", "udp", vide pour unix socket
+    protocol: udp # "tcp", "udp", vide pour unix socket
     address: 1.2.3.4 # addresse ip du serveur syslog, vide pour unix socket
     tag: monBlogPerso
     priority: 6 # LOG_INFO

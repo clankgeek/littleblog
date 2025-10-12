@@ -2,16 +2,19 @@
 <div class="header">
     <div class="container">
         <nav class="nav">
-            <a href="/" class="logo">{{ .siteName }} <i style="font-size: 0.5em;">{{ .description }}</i></a>
+            <div class="header-logo">
+                {{- if .logo }}<img src="{{ .logo }}?{{ .BuildID }}" class="logoimg" alt="logo">{{- end }}
+                <a href="/" class="logo">{{ .siteName }} <i style="font-size: 0.5em;">{{ .description }}</i></a>
+            </div>
             <div class="nav-actions">
                 {{ if .showSearch }}
                 <div x-data="searchComponent" class="search-container">
                     <input x-model="query" 
-                           @input.debounce.300ms="search" 
-                           @focus="showResults = true"
-                           @click.away="showResults = false"
-                           class="search-input"
-                           placeholder="🔍 Rechercher...">
+                        @input.debounce.300ms="search" 
+                        @focus="showResults = true"
+                        @click.away="showResults = false"
+                        class="search-input"
+                        placeholder="🔍 Rechercher...">
                     
                     <div x-show="showResults && results.length > 0" class="search-results">
                         <template x-for="post in results" :key="post.id">

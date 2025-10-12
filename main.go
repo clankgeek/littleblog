@@ -146,6 +146,7 @@ type UpdatePostRequest struct {
 
 type Config struct {
 	SiteName        string         `yaml:"sitename"`
+	Logo            string         `yaml:"logoimg"`
 	Description     string         `yaml:"description"`
 	Theme           string         `yaml:"theme"`
 	TrustedProxies  []string       `yaml:"trustedproxies"`
@@ -662,6 +663,7 @@ func createExampleConfig(filename string) error {
 	example := &Config{
 		SiteName:    "Mon Blog Tech",
 		Description: "Blog qui utilise littleblog",
+		Logo:        "/static/linux.png",
 		Theme:       "blue",
 		Database: DatabaseConfig{
 			Db:   "sqlite",
@@ -774,6 +776,7 @@ func convertConfig(yamlConfig *Config) *Config {
 	conf := &Config{
 		SiteName:        yamlConfig.SiteName,
 		Description:     yamlConfig.Description,
+		Logo:            yamlConfig.Logo,
 		Theme:           yamlConfig.Theme,
 		Database:        yamlConfig.Database,
 		User:            yamlConfig.User,
@@ -1651,6 +1654,7 @@ func indexHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "index", gin.H{
 		"title":           configuration.SiteName,
 		"siteName":        configuration.SiteName,
+		"logo":            configuration.Logo,
 		"description":     configuration.Description,
 		"isAuthenticated": isAdmin,
 		"showSearch":      true,
@@ -1670,6 +1674,7 @@ func pageNotFound(c *gin.Context, title string) {
 	c.HTML(http.StatusNotFound, "404_not_found", gin.H{
 		"title":       title,
 		"siteName":    configuration.SiteName,
+		"logo":        configuration.Logo,
 		"description": "La page que vous recherchez n'existe pas.",
 		"currentYear": time.Now().Year(),
 		"version":     VERSION,
@@ -1699,6 +1704,7 @@ func postHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "posts", gin.H{
 		"title":           post.Title,
 		"siteName":        configuration.SiteName,
+		"logo":            configuration.Logo,
 		"description":     configuration.Description,
 		"post":            post,
 		"isAuthenticated": isAdmin,
@@ -1725,6 +1731,7 @@ func loginPageHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "admin_login", gin.H{
 		"title":    "Connexion Admin",
 		"siteName": configuration.SiteName,
+		"logo":     configuration.Logo,
 		"version":  VERSION,
 		"BuildID":  BuildID,
 	})
@@ -1788,6 +1795,7 @@ func adminDashboardHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "admin_dashboard", gin.H{
 		"title":       "Dashboard Admin",
 		"siteName":    configuration.SiteName,
+		"logo":        configuration.Logo,
 		"pageTitle":   "Dashboard",
 		"pageIcon":    "📊",
 		"currentPage": "dashboard",
@@ -1927,6 +1935,7 @@ func adminPostsHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "admin_posts", gin.H{
 		"title":       "Gestion des Articles",
 		"siteName":    configuration.SiteName,
+		"logo":        configuration.Logo,
 		"pageTitle":   "Gestion des Articles",
 		"pageIcon":    "📝",
 		"currentPage": "posts",
@@ -1956,6 +1965,7 @@ func newPostPageHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "admin_post_form", gin.H{
 		"title":           "Nouvel Article",
 		"siteName":        configuration.SiteName,
+		"logo":            configuration.Logo,
 		"pageTitle":       "Nouvel Article",
 		"pageIcon":        "➕",
 		"currentPage":     "new_post",
@@ -1991,6 +2001,7 @@ func editPostPageHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "admin_post_form", gin.H{
 		"title":           "Éditer Article",
 		"siteName":        configuration.SiteName,
+		"logo":            configuration.Logo,
 		"pageTitle":       "Éditer l'Article",
 		"pageIcon":        "✏️",
 		"currentPage":     "edit_post",
