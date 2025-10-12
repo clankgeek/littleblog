@@ -5,14 +5,14 @@ document.addEventListener('alpine:init', () => {
         query: '',
         results: [],
         showResults: false,
-        
+
         async search() {
             if (this.query.length < 2) {
                 this.results = [];
                 this.showResults = false;
                 return;
             }
-            
+
             try {
                 const response = await fetch(`/api/search?q=${encodeURIComponent(this.query)}`);
                 if (response.ok) {
@@ -46,7 +46,7 @@ async function logout() {
 }
 
 // Utilitaires globaux
-window.showNotification = function(message, type = 'info') {
+window.showNotification = function (message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.textContent = message;
@@ -62,9 +62,9 @@ window.showNotification = function(message, type = 'info') {
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         animation: slideIn 0.3s ease-out;
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.remove();
     }, 4000);
