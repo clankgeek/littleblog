@@ -48,69 +48,78 @@
                 </div>
 
                 <!-- Extrait -->
-                <div class="form-group">
-                    <label class="form-label" for="excerpt"><img src="/files/img/note.svg" class="icon"> Résumé/Extrait</label>
-                    <textarea x-model="post.excerpt" 
-                              id="excerpt" 
-                              class="form-control"
-                              rows="4"
-                              placeholder="Résumé optionnel, si vide, il sera généré automatiquement a partir du contenu."></textarea>
-                    <div class="form-help">Affiché sur la page d'accueil et dans les résultats de recherche. Si vide, l'extrait sera fait automatiquement a partir du contenu.</div>
+                <div class="form-group" x-data="{ open: false }">
+                    <label class="form-label" for="excerpt" @click="open = !open" style="cursor: pointer;">
+                        <img src="/files/img/note.svg" class="icon"> Résumé/Extrait
+                        <span x-text="open ? '▼' : '▶'" style="font-size: 0.8em; margin-left: 5px;"></span>
+                    </label>
+                    
+                    <textarea x-show="open"
+                        x-model="post.excerpt"
+                        id="excerpt"
+                        class="form-control"
+                        rows="4"
+                        placeholder="Résumé optionnel, si vide, il sera généré automatiquement a partir du contenu.">
+                    </textarea>
+                    
+                    <div class="form-help" x-show="open">
+                        Affiché sur la page d'accueil et dans les résultats de recherche. Si vide, l'extrait sera fait automatiquement a partir du contenu.
+                    </div>
                 </div>
 
                 <!-- Contenu -->
                 <div class="form-group">
-    <label class="form-label" for="content"><img src="/files/img/openbook.svg" class="icon"> Contenu (Markdown) *</label>
-    
-    <!-- Barre d'outils pour l'éditeur -->
-    <div class="editor-toolbar">
-        <button type="button" @click="insertBold" class="toolbar-btn" title="Gras">
-            <strong>B</strong>
-        </button>
-        <button type="button" @click="insertItalic" class="toolbar-btn" title="Italique">
-            <em>I</em>
-        </button>
-        <button type="button" @click="insertCode" class="toolbar-btn" title="Code">
-            <code>&lt;/&gt;</code>
-        </button>
-        <button type="button" @click="insertLink" class="toolbar-btn" title="Lien">
-            <img src="/files/img/link.svg" class="icon">
-        </button>
-        <button type="button" @click="insertHeading" class="toolbar-btn" title="Titre">
-            H
-        </button>
-        <div class="toolbar-separator"></div>
-        <button type="button" @click="$refs.imageUpload.click()" class="toolbar-btn toolbar-btn-primary" title="Insérer une image">
-            <img src="/files/img/camera.svg" class="icon"> Image
-        </button>
-        <input type="file" 
-               x-ref="imageUpload" 
-               @change="uploadImage($event)" 
-               accept="image/*" 
-               style="display: none;">
-    </div>
-    
-    <textarea x-model="post.content" 
-              x-ref="contentEditor"
-              @input="updatePreview"
-              id="content" 
-              class="form-control"
-              placeholder="# Votre titre principal..."
-              required></textarea>
-              
-    <!-- Zone de progression d'upload -->
-    <div x-show="uploading" class="upload-progress">
-        <div class="progress-bar">
-            <div class="progress-fill" :style="`width: ${uploadProgress}%`"></div>
-        </div>
-        <span class="progress-text">Upload en cours... <span x-text="uploadProgress"></span>%</span>
-    </div>
-    
-    <div class="form-help">
-        <strong>Support Markdown :</strong> **gras**, *italique*, `code`, [liens](url), images, listes, etc.
-        <br>Cliquez sur <img src="/files/img/camera.svg" class="icon"> pour uploader une image (max 5MB).
-    </div>
-</div>
+                    <label class="form-label" for="content"><img src="/files/img/openbook.svg" class="icon"> Contenu (Markdown) *</label>
+                    
+                    <!-- Barre d'outils pour l'éditeur -->
+                    <div class="editor-toolbar">
+                        <button type="button" @click="insertBold" class="toolbar-btn" title="Gras">
+                            <strong>B</strong>
+                        </button>
+                        <button type="button" @click="insertItalic" class="toolbar-btn" title="Italique">
+                            <em>I</em>
+                        </button>
+                        <button type="button" @click="insertCode" class="toolbar-btn" title="Code">
+                            <code>&lt;/&gt;</code>
+                        </button>
+                        <button type="button" @click="insertLink" class="toolbar-btn" title="Lien">
+                            <img src="/files/img/link.svg" class="icon">
+                        </button>
+                        <button type="button" @click="insertHeading" class="toolbar-btn" title="Titre">
+                            H
+                        </button>
+                        <div class="toolbar-separator"></div>
+                        <button type="button" @click="$refs.imageUpload.click()" class="toolbar-btn toolbar-btn-primary" title="Insérer une image">
+                            <img src="/files/img/camera.svg" class="icon"> Image
+                        </button>
+                        <input type="file" 
+                            x-ref="imageUpload" 
+                            @change="uploadImage($event)" 
+                            accept="image/*" 
+                            style="display: none;">
+                    </div>
+                    
+                    <textarea x-model="post.content" 
+                            x-ref="contentEditor"
+                            @input="updatePreview"
+                            id="content" 
+                            class="form-control"
+                            placeholder="# Votre titre principal..."
+                            required></textarea>
+                            
+                    <!-- Zone de progression d'upload -->
+                    <div x-show="uploading" class="upload-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" :style="`width: ${uploadProgress}%`"></div>
+                        </div>
+                        <span class="progress-text">Upload en cours... <span x-text="uploadProgress"></span>%</span>
+                    </div>
+                    
+                    <div class="form-help">
+                        <strong>Support Markdown :</strong> **gras**, *italique*, `code`, [liens](url), images, listes, etc.
+                        <br>Cliquez sur <img src="/files/img/camera.svg" class="icon"> pour uploader une image (max 5MB).
+                    </div>
+                </div>
             </div>
 
             <div class="form-sidebar">
