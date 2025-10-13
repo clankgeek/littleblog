@@ -209,6 +209,7 @@ type DatabaseConfig struct {
 type MenuItem struct {
 	Key   string `yaml:"key"`
 	Value string `yaml:"value"`
+	Link  string `yaml:"link"`
 	Img   string `yaml:"img"`
 }
 
@@ -1053,14 +1054,22 @@ func GenerateMenu(items []MenuItem, category string) template.HTML {
 	for _, item := range items {
 		key := slugify(item.Key)
 		active := ""
-		if key == category {
+		if key == category && item.Link == "" {
 			active = " active"
 		}
 		img := ""
 		if item.Img != "" {
 			img = fmt.Sprintf("<img src=\"%s\" class=\"icon\"> ", item.Img)
 		}
-		menuStr += fmt.Sprintf("<a href=\"/%s\" class=\"nav-link%s\">%s%s</a>&nbsp;", key, active, img, item.Value)
+		target := ""
+		blank := ""
+		if item.Link != "" {
+			target = item.Link
+			blank = " target=\"_blank\""
+		} else {
+			target = "/" + key
+		}
+		menuStr += fmt.Sprintf("<a href=\"%s\" class=\"nav-link%s\"%s>%s%s</a>&nbsp;", target, active, blank, img, item.Value)
 	}
 	return safeHtml(menuStr)
 }

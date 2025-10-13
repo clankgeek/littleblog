@@ -106,6 +106,8 @@ menu:
     img: "/static/linux.png"
   - key: "software"
     value: "Logiciel"
+  - link: "https://github.com/clankgeek/littleblog"
+    value: "GitHub"
 ```
 
 ### Exemple docker compose Littleblog + Promotheus + Grafana

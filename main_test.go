@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -99,6 +100,26 @@ func createTestPost(db *gorm.DB) *Post {
 }
 
 // ============= Tests pour les modèles =============
+
+func TestGenerateMenu(t *testing.T) {
+	menu := []MenuItem{
+		{
+			Key:   "aaa",
+			Value: "AAA",
+			Img:   "/static/test.png",
+		},
+	}
+	assert.Equal(t, template.HTML("<a href=\"/aaa\" class=\"nav-link\"><img src=\"/static/test.png\" class=\"icon\"> AAA</a>&nbsp;"), GenerateMenu(menu, ""))
+	assert.Equal(t, template.HTML("<a href=\"/aaa\" class=\"nav-link active\"><img src=\"/static/test.png\" class=\"icon\"> AAA</a>&nbsp;"), GenerateMenu(menu, "aaa"))
+	menu = []MenuItem{
+		{
+			Key:   "aaa",
+			Value: "AAA",
+			Link:  "http://test.com",
+		},
+	}
+	assert.Equal(t, template.HTML("<a href=\"http://test.com\" class=\"nav-link\" target=\"_blank\">AAA</a>&nbsp;"), GenerateMenu(menu, "aaa"))
+}
 
 func TestPost_BeforeSave(t *testing.T) {
 	testDB := setupTestDB(t)
