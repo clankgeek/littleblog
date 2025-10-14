@@ -4,6 +4,7 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 
 ## Fonctionnalités
 
+- Multiple blogs, routage par hostname
 - Infinity scroll sur la liste des articles
 - Articles avec contenu Markdown
 - Extrait automatique pour l'index en texte brut, avec première image de l'article
@@ -64,10 +65,7 @@ Sinon vous pouvez utiliser le builder via une image docker
 Fichier sample `littleblog.yaml` :
 
 ```yaml
-sitename: Mon Blog
-description: Mon blog perso
-logoimg: /static/linux.png #logo optionnel, apparait a gauche du sitename
-theme: blue # blue, red, green, yellow, purple, cyan, orange, pink, gray, black, ou code couleur exemple: #000000
+production: false #false pour la preprod, true en production
 trustedproxies:
   - 192.168.1.2 # ip du reverse proxy authorisé en entrée
 trustedplatform: #cloudflare, google, flyio, ou header name exemple X-CDN-Client-IP
@@ -81,7 +79,6 @@ user:
   login: admin
   pass: admin1234 # mot de passe sera hashé en Argon2i au premier démarrage
 staticpath: "./static"
-production: false #false pour la preprod, true en production
 logger:
   level: debug #"debug", "info", "warn", "error"
   file:
@@ -100,14 +97,22 @@ logger:
 listen:
   website: 0.0.0.0:8080
   metrics: 0.0.0.0:8090 #enlever pour désactiver, promotheus format
-menu:
-  - key: "linux"
-    value: "Ubuntu"
-    img: "/static/linux.png"
-  - key: "software"
-    value: "Logiciel"
-  - link: "https://github.com/clankgeek/littleblog"
-    value: "GitHub"
+blogs:
+  - id: 0 # entier unique par blog, obligatoire pour la base de données
+    hostname: blog.monsite.com # pour le routage en cas de multiple blog
+    sitename: Mon Blog
+    description: Mon blog perso
+    logoimg: /static/linux.png #logo optionnel, apparait a gauche du sitename
+    theme: blue # blue, red, green, yellow, purple, cyan, orange, pink, gray, black, ou code couleur exemple: #000000
+    menu:
+    - key: "linux"
+      value: "Ubuntu"
+      img: "/static/linux.png"
+    - key: "software"
+      value: "Logiciel"
+    - link: "https://github.com/clankgeek/littleblog"
+      value: "GitHub"
+
 ```
 
 ### Exemple docker compose Littleblog + Promotheus + Grafana

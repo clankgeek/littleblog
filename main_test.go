@@ -69,8 +69,6 @@ func setupTestRouter() *gin.Engine {
 
 func setupTestConfig() *Config {
 	c := &Config{
-		SiteName:    "Test Blog",
-		Description: "Test Description",
 		Database: DatabaseConfig{
 			Db:   "sqlite",
 			Path: ":memory:",
@@ -81,6 +79,19 @@ func setupTestConfig() *Config {
 		},
 		Production: false,
 		Logger:     LoggerConfig{},
+		Blogs: []BlogsConfig{
+			{
+				SiteName:    "Test Blog",
+				Description: "Test Description",
+			},
+		},
+	}
+	BlogsId = make(map[uint]string, len(c.Blogs))
+	Blogs = make(map[string]BlogsConfig, len(c.Blogs))
+	for _, item := range c.Blogs {
+		item.ThemeCSS = GenerateThemeCSS(item.Theme)
+		Blogs[item.Hostname] = item
+		BlogsId[item.Id] = item.Hostname
 	}
 	initLogger(c.Logger, false)
 
@@ -89,6 +100,7 @@ func setupTestConfig() *Config {
 
 func createTestPost(db *gorm.DB) *Post {
 	post := &Post{
+		BlogID:   0,
 		Title:    "Test Post",
 		Content:  "Test Content",
 		Excerpt:  "Test Excerpt",
@@ -125,6 +137,7 @@ func TestPost_BeforeSave(t *testing.T) {
 	testDB := setupTestDB(t)
 
 	post := &Post{
+		BlogID:   0,
 		Title:    "Test Post",
 		Content:  "Test Content",
 		TagsList: []string{"go", "test", "blog"},
@@ -140,6 +153,7 @@ func TestPost_AfterFind(t *testing.T) {
 	initMarkdown()
 
 	post := &Post{
+		BlogID:  0,
 		Title:   "Test Post",
 		Content: "**Bold Text**",
 		Tags:    "tag1,tag2,tag3",
@@ -173,7 +187,7 @@ func TestCreateExampleConfig(t *testing.T) {
 	var config Config
 	err = yaml.Unmarshal(data, &config)
 	assert.NoError(t, err)
-	assert.Equal(t, "Mon Blog Tech", config.SiteName)
+	assert.Equal(t, "Mon Blog Tech", config.Blogs[0].SiteName)
 	assert.Equal(t, "admin", config.User.Login)
 }
 
@@ -181,14 +195,18 @@ func TestLoadConfig(t *testing.T) {
 	// Créer un fichier de config temporaire
 	tempFile := "test_load_config.yaml"
 	config := &Config{
-		SiteName:    "Test Site",
-		Description: "Test Desc",
 		Database: DatabaseConfig{
 			Db:   "sqlite",
 			Path: "test.db",
 		},
 		User: UserConfig{
 			Login: "testadmin",
+		},
+		Blogs: []BlogsConfig{
+			{
+				SiteName:    "Test Site",
+				Description: "Test Desc",
+			},
 		},
 	}
 
@@ -201,7 +219,7 @@ func TestLoadConfig(t *testing.T) {
 	// Tester le chargement
 	loaded, err := loadConfig(tempFile)
 	assert.NoError(t, err)
-	assert.Equal(t, config.SiteName, loaded.SiteName)
+	assert.Equal(t, config.Blogs[0].SiteName, loaded.Blogs[0].SiteName)
 	assert.Equal(t, config.User.Login, loaded.User.Login)
 
 	// Tester avec un fichier inexistant
@@ -217,8 +235,8 @@ func TestGetPostsAPI(t *testing.T) {
 	r := setupTestRouter()
 
 	// Créer des posts de test
-	testDB.Create(&Post{Title: "Post 1", Content: "Content 1"})
-	testDB.Create(&Post{Title: "Post 2", Content: "Content 2"})
+	testDB.Create(&Post{BlogID: 0, Title: "Post 1", Content: "Content 1"})
+	testDB.Create(&Post{BlogID: 0, Title: "Post 2", Content: "Content 2"})
 
 	r.GET("/api/posts", getPostsAPI)
 
@@ -306,18 +324,21 @@ func TestSearchPostsAPI(t *testing.T) {
 
 	// Créer des posts avec différents contenus
 	testDB.Create(&Post{
+		BlogID:  0,
 		Title:   "Go Programming",
 		Content: "Learn Go programming language",
 		Excerpt: "Introduction to Go",
 		Tags:    "golang,programming",
 	})
 	testDB.Create(&Post{
+		BlogID:  0,
 		Title:   "Python Tutorial",
 		Content: "Learn Python basics",
 		Excerpt: "Python for beginners",
 		Tags:    "python,tutorial",
 	})
 	testDB.Create(&Post{
+		BlogID:  0,
 		Title:   "JavaScript Guide",
 		Content: "Modern JavaScript features",
 		Excerpt: "ES6 and beyond",
@@ -771,6 +792,7 @@ func BenchmarkSearchPosts(b *testing.B) {
 	// Créer de nombreux posts pour le benchmark
 	for i := 0; i < 100; i++ {
 		testDB.Create(&Post{
+			BlogID:  0,
 			Title:   fmt.Sprintf("Post %d", i),
 			Content: fmt.Sprintf("Content for post %d with various keywords", i),
 			Tags:    fmt.Sprintf("tag%d,benchmark", i),
@@ -856,6 +878,7 @@ func TestPaginationLogic(t *testing.T) {
 	// Créer 25 posts
 	for i := 1; i <= 25; i++ {
 		testDB.Create(&Post{
+			BlogID:  0,
 			Title:   fmt.Sprintf("Post %d", i),
 			Content: fmt.Sprintf("Content %d", i),
 		})
@@ -1082,6 +1105,7 @@ func TestRegressionEmptyTags(t *testing.T) {
 
 	// Test qu'un post sans tags fonctionne correctement
 	post := &Post{
+		BlogID:   0,
 		Title:    "Post without tags",
 		Content:  "Content",
 		TagsList: []string{},
@@ -1104,6 +1128,7 @@ func TestRegressionLongContent(t *testing.T) {
 	longContent := strings.Repeat("This is a very long content. ", 1000)
 
 	post := &Post{
+		BlogID:  0,
 		Title:   "Long post",
 		Content: longContent,
 	}
@@ -1173,6 +1198,7 @@ func TestRSSHandler(t *testing.T) {
 	// Créer quelques posts de test
 	for i := 1; i <= 3; i++ {
 		post := &Post{
+			BlogID:   0,
 			Title:    fmt.Sprintf("Post %d", i),
 			Content:  fmt.Sprintf("Content for post %d", i),
 			Excerpt:  fmt.Sprintf("Excerpt %d", i),
@@ -1197,7 +1223,7 @@ func TestRSSHandler(t *testing.T) {
 	err := xml.Unmarshal(w.Body.Bytes(), &rss)
 	assert.NoError(t, err)
 	assert.Equal(t, "2.0", rss.Version)
-	assert.Equal(t, configuration.SiteName, rss.Channel.Title)
+	assert.Equal(t, configuration.Blogs[0].SiteName, rss.Channel.Title)
 	assert.Len(t, rss.Channel.Items, 3)
 
 	// Vérifier le contenu du premier item

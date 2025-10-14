@@ -3,7 +3,7 @@
 <html lang="fr">
 <head>
     {{ template "head" . }}
-    <link rel="stylesheet" href="/files/theme.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/theme.css/{{ .blogId }}?buildId{{ .BuildID }}">
     <link rel="stylesheet" href="/files/css/common.css?{{ .BuildID }}">
     <link rel="stylesheet" href="/files/css/login.css?{{ .BuildID }}">
 </head>

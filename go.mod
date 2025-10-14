@@ -1,6 +1,6 @@
 module littleblog
 
-go 1.25.2
+go 1.25
 
 require (
 	github.com/andskur/argon2-hashing v0.1.3

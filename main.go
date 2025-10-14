@@ -68,10 +68,10 @@ var (
 	db            *gorm.DB
 	md            goldmark.Markdown
 	configuration *Config
-	theme         string
-	rsslink       template.HTML
 	BuildID       string
 	captcha       *captchas
+	Blogs         map[string]BlogsConfig
+	BlogsId       map[uint]string
 )
 
 //go:embed templates/**/*.html
@@ -90,6 +90,7 @@ type captchas struct {
 // Models avec tags GORM
 type Post struct {
 	ID          uint          `json:"id" gorm:"primaryKey"`
+	BlogID      uint          `json:"blog_id" gorm:"index"`
 	Title       string        `json:"title" gorm:"not null"`
 	Content     string        `json:"content" gorm:"type:text;not null"`
 	ContentHTML template.HTML `json:"content_html" gorm:"-"`
@@ -145,10 +146,6 @@ type UpdatePostRequest struct {
 }
 
 type Config struct {
-	SiteName        string         `yaml:"sitename"`
-	Logo            string         `yaml:"logoimg"`
-	Description     string         `yaml:"description"`
-	Theme           string         `yaml:"theme"`
 	TrustedProxies  []string       `yaml:"trustedproxies"`
 	TrustedPlatform string         `yaml:"trustedplatform"`
 	Database        DatabaseConfig `yaml:"database"`
@@ -156,8 +153,21 @@ type Config struct {
 	User            UserConfig     `yaml:"user"`
 	Production      bool           `yaml:"production"`
 	Listen          ListenConfig   `yaml:"listen"`
-	Menu            []MenuItem     `yaml:"menu"`
 	Logger          LoggerConfig   `yaml:"logger"`
+	Blogs           []BlogsConfig  `yaml:"blogs"`
+}
+
+type BlogsConfig struct {
+	Id          uint       `yaml:"id"`
+	Hostname    string     `yaml:"hostname"`
+	SiteName    string     `yaml:"sitename"`
+	Logo        string     `yaml:"logoimg"`
+	Description string     `yaml:"description"`
+	Theme       string     `yaml:"theme"`
+	Menu        []MenuItem `yaml:"menu"`
+
+	ThemeCSS string
+	LinkRSS  template.HTML
 }
 
 type LoggerConfig struct {
@@ -662,10 +672,6 @@ func (cap *captchas) verifyCaptcha(captchaID string, captchaAnswer string) error
 
 func createExampleConfig(filename string) error {
 	example := &Config{
-		SiteName:    "Mon Blog Tech",
-		Description: "Blog qui utilise littleblog",
-		Logo:        "/static/linux.png",
-		Theme:       "blue",
 		Database: DatabaseConfig{
 			Db:   "sqlite",
 			Path: "./test.db",
@@ -689,9 +695,18 @@ func createExampleConfig(filename string) error {
 			Website: "0.0.0.0:8080",
 			Metrics: "0.0.0.0:8090",
 		},
-		Menu: []MenuItem{
-			{Key: "menu1", Value: "Mon premier menu"},
-			{Key: "menu2", Value: "Mon second menu", Img: "/static/linux.png"},
+		Blogs: []BlogsConfig{
+			{
+				Id:          0,
+				SiteName:    "Mon Blog Tech",
+				Description: "Blog qui utilise littleblog",
+				Logo:        "/static/linux.png",
+				Theme:       "blue",
+				Menu: []MenuItem{
+					{Key: "menu1", Value: "Mon premier menu"},
+					{Key: "menu2", Value: "Mon second menu", Img: "/static/linux.png"},
+				},
+			},
 		},
 	}
 	return writeConfigYaml(filename, example)
@@ -763,10 +778,16 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 		}
 	}
 
-	theme = GenerateThemeCSS(conf.Theme)
-	rsslink, err = GenerateDynamicRSS(conf)
-	if err != nil {
-		return nil, err
+	BlogsId = make(map[uint]string, len(conf.Blogs))
+	Blogs = make(map[string]BlogsConfig, len(conf.Blogs))
+	for _, item := range conf.Blogs {
+		item.LinkRSS, err = GenerateDynamicRSS(item.Menu, item.SiteName)
+		if err != nil {
+			return nil, err
+		}
+		item.ThemeCSS = GenerateThemeCSS(item.Theme)
+		Blogs[item.Hostname] = item
+		BlogsId[item.Id] = item.Hostname
 	}
 
 	return conf, nil
@@ -775,19 +796,15 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 // Convertir la config YAML en config interne
 func convertConfig(yamlConfig *Config) *Config {
 	conf := &Config{
-		SiteName:        yamlConfig.SiteName,
-		Description:     yamlConfig.Description,
-		Logo:            yamlConfig.Logo,
-		Theme:           yamlConfig.Theme,
 		Database:        yamlConfig.Database,
 		User:            yamlConfig.User,
 		StaticPath:      yamlConfig.StaticPath,
 		Production:      yamlConfig.Production,
 		Listen:          yamlConfig.Listen,
-		Menu:            yamlConfig.Menu,
 		TrustedProxies:  yamlConfig.TrustedProxies,
 		TrustedPlatform: yamlConfig.TrustedPlatform,
 		Logger:          yamlConfig.Logger,
+		Blogs:           yamlConfig.Blogs,
 	}
 
 	return conf
@@ -917,7 +934,7 @@ func initDatabase() {
 	LogInfo("Base de données initialisée avec succès")
 }
 
-func getFirstMenuKey(conf *Config) string {
+func getFirstMenuKey(conf *BlogsConfig) string {
 	if len(conf.Menu) > 0 {
 		return slugify(conf.Menu[0].Key)
 	}
@@ -929,7 +946,8 @@ func seedDatabase() {
 
 	posts := []Post{
 		{
-			Title: "Bienvenue sur mon blog",
+			BlogID: 0,
+			Title:  "Bienvenue sur mon blog",
 			Content: `# Bienvenue !
 
 Ceci est le premier article avec le moteur de blog **littleblog**, qui utilise un backend en **Gin Gonic** et un frontend en **Alpine.js**.
@@ -963,7 +981,7 @@ N'hésitez pas à laisser un commentaire !`,
 			Excerpt:  "Premier article de présentation du blog avec les technologies utilisées.",
 			Author:   "Admin",
 			TagsList: []string{"accueil", "présentation"},
-			Category: getFirstMenuKey(configuration),
+			Category: getFirstMenuKey(&configuration.Blogs[0]),
 		},
 	}
 
@@ -1074,14 +1092,14 @@ func GenerateMenu(items []MenuItem, category string) template.HTML {
 	return safeHtml(menuStr)
 }
 
-func GenerateDynamicRSS(conf *Config) (template.HTML, error) {
+func GenerateDynamicRSS(Menu []MenuItem, SiteName string) (template.HTML, error) {
 	rssStr := ""
-	for _, item := range conf.Menu {
+	for _, item := range Menu {
 		slugifiedKey := slugify(item.Key)
 		if slugifiedKey == "files" || slugifiedKey == "static" {
 			return "", fmt.Errorf("la clé du menu doit etre différente de 'files' et de 'static'")
 		}
-		rssStr += fmt.Sprintf("<link rel=\"alternate\" type=\"application/rss+xml\" title=\"%s - %s\" href=\"/rss.xml/%s\"/>\n", conf.SiteName, slugifiedKey, slugifiedKey)
+		rssStr += fmt.Sprintf("<link rel=\"alternate\" type=\"application/rss+xml\" title=\"%s - %s\" href=\"/rss.xml/%s\"/>\n", SiteName, slugifiedKey, slugifiedKey)
 	}
 	return safeHtml(rssStr), nil
 }
@@ -1252,6 +1270,19 @@ func middlerwareLogger() gin.HandlerFunc {
 					Msg("Request error")
 			}
 		}
+	}
+}
+
+func middlewareBlogId() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		host := c.Request.Host
+		if strings.Contains(host, ":") {
+			host = strings.Split(host, ":")[0]
+		}
+		if _, ok := Blogs[host]; ok {
+			c.Set("hostname", host)
+		}
+		c.Next()
 	}
 }
 
@@ -1463,6 +1494,9 @@ func setMiddleware(r *gin.Engine) {
 	r.Use(middlerwareLogger())
 	r.Use(middlewareRecovery())
 
+	// get blog Id
+	r.Use(middlewareBlogId())
+
 	// use Compression, with gzip
 	r.Use(gzip.Gzip(gzip.BestSpeed))
 
@@ -1544,7 +1578,7 @@ func setRoutes(r *gin.Engine) {
 	r.GET("/files/img/*.svg", ServeMinifiedStatic(m))
 
 	// theme
-	r.GET("/files/theme.css", themeHandler)
+	r.GET("/files/theme.css/:id", themeHandler)
 
 	// Routes publiques
 	r.GET("/", indexHandler)
@@ -1642,12 +1676,37 @@ func main() {
 
 // ============= HANDLERS PUBLICS =============
 
+func getConfItem(c *gin.Context, withId bool, id uint) BlogsConfig {
+	if withId {
+		if item, ok := BlogsId[id]; ok {
+			return Blogs[item]
+		}
+	} else {
+		host, found := c.Get("hostname")
+		if found {
+			return Blogs[host.(string)]
+		}
+	}
+	if item, ok := BlogsId[0]; ok {
+		return Blogs[item]
+	}
+	return BlogsConfig{}
+}
+
 func themeHandler(c *gin.Context) {
+	idStr := c.Param("id")
+	blogId, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		blogId = 0
+	}
+	item := getConfItem(c, true, uint(blogId))
+
 	c.Header("Content-Type", "text/css; charset=utf-8")
 	c.Header("Cache-Control", "public, max-age=3600")
 	re := regexp.MustCompile("[^a-zA-Z0-9]+")
-	c.Header("ETag", BuildID+re.ReplaceAllString(configuration.Theme, ""))
-	c.Data(http.StatusOK, "text/css", []byte(theme))
+	c.Header("ETag", fmt.Sprintf("%s%s%d", BuildID, re.ReplaceAllString(item.Theme, ""), blogId))
+
+	c.Data(http.StatusOK, "text/css", []byte(item.ThemeCSS))
 }
 
 func indexHandler(c *gin.Context) {
@@ -1660,19 +1719,21 @@ func indexHandler(c *gin.Context) {
 		memories = getMemUsage()
 	}
 
+	item := getConfItem(c, false, 0)
 	c.HTML(http.StatusOK, "index", gin.H{
-		"title":           configuration.SiteName,
-		"siteName":        configuration.SiteName,
-		"logo":            configuration.Logo,
-		"description":     configuration.Description,
+		"blogId":          item.Id,
+		"title":           item.SiteName,
+		"siteName":        item.SiteName,
+		"logo":            item.Logo,
+		"description":     item.Description,
 		"isAuthenticated": isAdmin,
 		"showSearch":      true,
 		"currentYear":     time.Now().Year(),
 		"ogType":          "website",
 		"version":         VERSION,
 		"category":        category,
-		"menu":            GenerateMenu(configuration.Menu, category),
-		"rsslink":         rsslink,
+		"menu":            GenerateMenu(item.Menu, category),
+		"rsslink":         item.LinkRSS,
 		"BuildID":         BuildID,
 		"memories":        memories,
 		"renderTime":      getRenderTime(c),
@@ -1680,15 +1741,17 @@ func indexHandler(c *gin.Context) {
 }
 
 func pageNotFound(c *gin.Context, title string) {
+	item := getConfItem(c, false, 0)
 	c.HTML(http.StatusNotFound, "404_not_found", gin.H{
+		"blogId":      item.Id,
 		"title":       title,
-		"siteName":    configuration.SiteName,
-		"logo":        configuration.Logo,
+		"siteName":    item.SiteName,
+		"logo":        item.Logo,
 		"description": "La page que vous recherchez n'existe pas.",
 		"currentYear": time.Now().Year(),
 		"version":     VERSION,
 		"BuildID":     BuildID,
-		"menu":        GenerateMenu(configuration.Menu, ""),
+		"menu":        GenerateMenu(item.Menu, ""),
 	})
 }
 
@@ -1699,9 +1762,10 @@ func postHandler(c *gin.Context) {
 		pageNotFound(c, "Page non trouvée")
 		return
 	}
+	item := getConfItem(c, false, 0)
 
 	var post Post
-	result := db.First(&post, uint(id))
+	result := db.Where("blog_id = ?", item.Id).First(&post, uint(id))
 	if result.Error != nil {
 		pageNotFound(c, "Article non trouvé")
 		return
@@ -1711,10 +1775,11 @@ func postHandler(c *gin.Context) {
 	isAdmin := session.Get("user_id") != nil
 
 	c.HTML(http.StatusOK, "posts", gin.H{
+		"blogId":          item.Id,
 		"title":           post.Title,
-		"siteName":        configuration.SiteName,
-		"logo":            configuration.Logo,
-		"description":     configuration.Description,
+		"siteName":        item.SiteName,
+		"logo":            item.Logo,
+		"description":     item.Description,
 		"post":            post,
 		"isAuthenticated": isAdmin,
 		"showSearch":      false,
@@ -1722,7 +1787,7 @@ func postHandler(c *gin.Context) {
 		"ogTitle":         post.Title,
 		"ogType":          "article",
 		"version":         VERSION,
-		"menu":            GenerateMenu(configuration.Menu, post.Category),
+		"menu":            GenerateMenu(item.Menu, post.Category),
 		"BuildID":         BuildID,
 		"renderTime":      getRenderTime(c),
 	})
@@ -1736,11 +1801,13 @@ func loginPageHandler(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, "/admin")
 		return
 	}
+	item := getConfItem(c, false, 0)
 
 	c.HTML(http.StatusOK, "admin_login", gin.H{
+		"blogId":   item.Id,
 		"title":    "Connexion Admin",
-		"siteName": configuration.SiteName,
-		"logo":     configuration.Logo,
+		"siteName": item.SiteName,
+		"logo":     item.Logo,
 		"version":  VERSION,
 		"BuildID":  BuildID,
 	})
@@ -1788,23 +1855,30 @@ func logoutHandler(c *gin.Context) {
 // ============= HANDLERS D'ADMINISTRATION =============
 
 func adminDashboardHandler(c *gin.Context) {
+	item := getConfItem(c, false, 0)
+
 	var stats struct {
 		TotalPosts    int64
 		TotalComments int64
 		RecentPosts   []Post
 	}
 
-	db.Model(&Post{}).Count(&stats.TotalPosts)
-	db.Model(&Comment{}).Count(&stats.TotalComments)
+	db.Model(&Post{}).Where("blog_id = ?").Count(&stats.TotalPosts)
+	db.Model(&Comment{}).
+		Joins("JOIN posts ON posts.id = comments.post_id").
+		Where("posts.blog_id = ?", item.Id).
+		Count(&stats.TotalComments)
+
 	db.Order("created_at desc").Limit(5).Find(&stats.RecentPosts)
 
 	session := sessions.Default(c)
 	username := session.Get("username")
 
 	c.HTML(http.StatusOK, "admin_dashboard", gin.H{
+		"blogId":      item.Id,
 		"title":       "Dashboard Admin",
-		"siteName":    configuration.SiteName,
-		"logo":        configuration.Logo,
+		"siteName":    item.SiteName,
+		"logo":        item.Logo,
 		"pageTitle":   "Dashboard",
 		"pageIcon":    "📊",
 		"currentPage": "dashboard",
@@ -1940,11 +2014,12 @@ func adminPostsHandler(c *gin.Context) {
 
 	session := sessions.Default(c)
 	username := session.Get("username")
-
+	item := getConfItem(c, false, 0)
 	c.HTML(http.StatusOK, "admin_posts", gin.H{
+		"blogId":      item.Id,
 		"title":       "Gestion des Articles",
-		"siteName":    configuration.SiteName,
-		"logo":        configuration.Logo,
+		"siteName":    item.SiteName,
+		"logo":        item.Logo,
 		"pageTitle":   "Gestion des Articles",
 		"pageIcon":    "📝",
 		"currentPage": "posts",
@@ -1958,9 +2033,9 @@ func adminPostsHandler(c *gin.Context) {
 	})
 }
 
-func getOptionsCategory() template.HTML {
+func getOptionsCategory(item BlogsConfig) template.HTML {
 	var optionsCategory string
-	for _, item := range configuration.Menu {
+	for _, item := range item.Menu {
 		slugifiedKey := slugify(item.Key)
 		optionsCategory += fmt.Sprintf("<option value=\"%s\">%s</option>", slugifiedKey, slugifiedKey)
 	}
@@ -1970,11 +2045,12 @@ func getOptionsCategory() template.HTML {
 func newPostPageHandler(c *gin.Context) {
 	session := sessions.Default(c)
 	username := session.Get("username")
-
+	item := getConfItem(c, false, 0)
 	c.HTML(http.StatusOK, "admin_post_form", gin.H{
+		"blogId":          item.Id,
 		"title":           "Nouvel Article",
-		"siteName":        configuration.SiteName,
-		"logo":            configuration.Logo,
+		"siteName":        item.SiteName,
+		"logo":            item.Logo,
 		"pageTitle":       "Nouvel Article",
 		"pageIcon":        "➕",
 		"currentPage":     "new_post",
@@ -1983,7 +2059,7 @@ func newPostPageHandler(c *gin.Context) {
 		"currentYear":     time.Now().Year(),
 		"isAdmin":         true,
 		"version":         VERSION,
-		"optionsCategory": getOptionsCategory(),
+		"optionsCategory": getOptionsCategory(item),
 		"BuildID":         BuildID,
 		"memories":        getMemUsage(),
 	})
@@ -2006,11 +2082,12 @@ func editPostPageHandler(c *gin.Context) {
 
 	session := sessions.Default(c)
 	username := session.Get("username")
-
+	item := getConfItem(c, false, 0)
 	c.HTML(http.StatusOK, "admin_post_form", gin.H{
+		"blogId":          item.Id,
 		"title":           "Éditer Article",
-		"siteName":        configuration.SiteName,
-		"logo":            configuration.Logo,
+		"siteName":        item.SiteName,
+		"logo":            item.Logo,
 		"pageTitle":       "Éditer l'Article",
 		"pageIcon":        "✏️",
 		"currentPage":     "edit_post",
@@ -2020,7 +2097,7 @@ func editPostPageHandler(c *gin.Context) {
 		"currentYear":     time.Now().Year(),
 		"isAdmin":         true,
 		"version":         VERSION,
-		"optionsCategory": getOptionsCategory(),
+		"optionsCategory": getOptionsCategory(item),
 		"BuildID":         BuildID,
 		"memories":        getMemUsage(),
 	})
@@ -2044,7 +2121,10 @@ func createPostHandler(c *gin.Context) {
 		}
 	}
 
+	item := getConfItem(c, false, 0)
+
 	post := Post{
+		BlogID:   item.Id,
 		Title:    strings.TrimSpace(req.Title),
 		Content:  strings.TrimSpace(req.Content),
 		Excerpt:  strings.TrimSpace(req.Excerpt),
@@ -2149,12 +2229,14 @@ func deletePostHandler(c *gin.Context) {
 func rssHandler(c *gin.Context) {
 	var posts []Post
 
+	item := getConfItem(c, false, 0)
+
 	// Récupérer les 20 derniers posts
 	query := db.Order("created_at desc").Limit(20)
 
 	category := c.Param("category")
 	if category != "" {
-		query = query.Where("category = ?", slugify(category))
+		query = query.Where("category = ? AND blogId = ?", slugify(category), item.Id)
 	}
 
 	result := query.Find(&posts)
@@ -2174,9 +2256,9 @@ func rssHandler(c *gin.Context) {
 	rss := RSS{
 		Version: "2.0",
 		Channel: Channel{
-			Title:         configuration.SiteName,
+			Title:         item.SiteName,
 			Link:          baseURL,
-			Description:   configuration.Description,
+			Description:   item.Description,
 			Language:      "fr-FR",
 			Generator:     fmt.Sprintf("Littleblog v%s", VERSION),
 			LastBuildDate: time.Now().Format(time.RFC1123Z),
@@ -2184,7 +2266,7 @@ func rssHandler(c *gin.Context) {
 		},
 	}
 
-	rss.Channel.Copyright = fmt.Sprintf("© %d %s", time.Now().Year(), configuration.SiteName)
+	rss.Channel.Copyright = fmt.Sprintf("© %d %s", time.Now().Year(), item.SiteName)
 
 	// Convertir les posts en items RSS
 	for _, post := range posts {
@@ -2255,8 +2337,9 @@ func getPostsAPI(c *gin.Context) {
 	// Calcul de l'offset
 	offset := (page - 1) * limit
 
+	item := getConfItem(c, false, 0)
 	buildQuery := func() *gorm.DB {
-		query := db.Model(&Post{})
+		query := db.Model(&Post{}).Where("blog_id = ?", item.Id)
 		if category != "" {
 			query = query.Where("category = ?", category)
 		}
@@ -2398,10 +2481,12 @@ func searchPostsAPI(c *gin.Context) {
 
 	var posts []Post
 
+	item := getConfItem(c, false, 0)
+
 	searchTerm := "%" + query + "%"
 	result := db.Where(
-		"LOWER(title) LIKE ? OR LOWER(content) LIKE ? OR LOWER(excerpt) LIKE ? OR LOWER(tags) LIKE ?",
-		searchTerm, searchTerm, searchTerm, searchTerm,
+		"blog_id = ? AND (LOWER(title) LIKE ? OR LOWER(content) LIKE ? OR LOWER(excerpt) LIKE ? OR LOWER(tags) LIKE ?)",
+		item.Id, searchTerm, searchTerm, searchTerm, searchTerm,
 	).Order("created_at desc").Find(&posts)
 
 	if result.Error != nil {
