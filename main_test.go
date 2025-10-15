@@ -113,6 +113,23 @@ func createTestPost(db *gorm.DB) *Post {
 
 // ============= Tests pour les modèles =============
 
+func TestExtractImages(t *testing.T) {
+	s := "yoyo ![monimage.jpg](/static/uploads/1759683627_d4hhlyrc.jpg) oyoyo ![monimage2.jpg](/static/uploads/1759683627_d4hhlxxx.jpg) x"
+	found, images := ExtractImages(s, true, false)
+	assert.True(t, found)
+	assert.True(t, len(images) == 1)
+	assert.Equal(t, "![monimage.jpg](/static/uploads/1759683627_d4hhlyrc.jpg)", images[0])
+
+	found, images = ExtractImages(s, false, true)
+	assert.True(t, found)
+	assert.Equal(t, 2, len(images))
+	assert.Equal(t, "/static/uploads/1759683627_d4hhlyrc.jpg", images[0])
+	assert.Equal(t, "/static/uploads/1759683627_d4hhlxxx.jpg", images[1])
+
+	found, _ = ExtractImages("xxx", true, false)
+	assert.False(t, found)
+}
+
 func TestGenerateMenu(t *testing.T) {
 	menu := []MenuItem{
 		{

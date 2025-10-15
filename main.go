@@ -271,7 +271,10 @@ func (p *Post) FillExcerpt() error {
 		if p.Excerpt == "" {
 			p.Excerpt = ExtractExcerpt(p.Content, 500)
 		}
-		p.FirstImage = ExtractFirstImage(p.Content)
+		found, l := ExtractImages(p.Content, true, false)
+		if found {
+			p.FirstImage = l[0]
+		}
 	}
 	return nil
 }
@@ -326,25 +329,43 @@ func ExtractExcerpt(markdown string, maxLength int) string {
 	return text
 }
 
-// ExtractFirstImage extrait l'URL de la première image du Markdown
+// ExtractImages extrait l'URL des images du Markdown
 // Exemple: ![monimage.jpg](/static/uploads/1759683627_d4hhlyrc.jpg)
-func ExtractFirstImage(markdown string) string {
+func ExtractImages(markdown string, firstOnly bool, fileOnly bool) (bool, []string) {
 	if markdown == "" {
-		return ""
+		return false, nil
 	}
 
 	// Pattern pour les images markdown: ![alt](url)
 	reImage := regexp.MustCompile(`!\[[^\]]*\]\(([^)]+)\)`)
-	matches := reImage.FindStringSubmatch(markdown)
 
-	if len(matches) > 1 {
-		imageURL := strings.TrimSpace(matches[1])
-		// Nettoyer l'URL (supprimer les guillemets et espaces éventuels)
-		imageURL = strings.Trim(imageURL, `"' `)
-		return imageURL
+	var l []string
+	found := false
+
+	// Utiliser FindAllStringSubmatch au lieu de FindStringSubmatch
+	matches := reImage.FindAllStringSubmatch(markdown, -1)
+
+	for _, match := range matches {
+		if len(match) > 1 {
+			if fileOnly {
+				// match[1] contient déjà le chemin capturé par le groupe ()
+				imageURL := strings.TrimSpace(match[1])
+				imageURL = strings.Trim(imageURL, `"' `)
+				l = append(l, imageURL)
+			} else {
+				// match[0] contient toute la correspondance ![alt](url)
+				imageURL := strings.TrimSpace(match[0])
+				l = append(l, imageURL)
+			}
+			found = true
+
+			if firstOnly {
+				break
+			}
+		}
 	}
 
-	return ""
+	return found, l
 }
 
 // InitLogger configure le logger global Zerolog
@@ -1939,8 +1960,10 @@ func uploadImageHandler(c *gin.Context) {
 	// Redimensionner si nécessaire
 	processedImg := resizeImage(img, 1600)
 
+	item := getConfItem(c, false, 0)
+
 	// Créer le dossier uploads s'il n'existe pas
-	uploadsDir := "./static/uploads"
+	uploadsDir := fmt.Sprintf("./static/uploads/%d", item.Id)
 	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur création dossier"})
 		return
@@ -1999,7 +2022,7 @@ func uploadImageHandler(c *gin.Context) {
 	finalSize := fileInfo.Size()
 
 	// Retourner l'URL de l'image
-	imageURL := fmt.Sprintf("/static/uploads/%s", filename)
+	imageURL := fmt.Sprintf("/static/uploads/%d/%s", item.Id, filename)
 	c.JSON(http.StatusOK, gin.H{
 		"url":      imageURL,
 		"filename": filename,
@@ -2198,7 +2221,18 @@ func deletePostHandler(c *gin.Context) {
 		return
 	}
 
-	// Supprimer dans une transaction (commentaires)
+	item := getConfItem(c, false, 0)
+
+	// chercher les images du post
+	var post Post
+	result := db.Where("blog_id = ?", item.Id).First(&post, uint(id))
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Article non trouvé"})
+		return
+	}
+	imagesFound, images := ExtractImages(post.Content, false, true)
+
+	// Supprimer dans une transaction commentaires puis l'article
 	tx := db.Begin()
 
 	// Supprimer les commentaires
@@ -2218,6 +2252,17 @@ func deletePostHandler(c *gin.Context) {
 	if err := tx.Commit().Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur validation suppression"})
 		return
+	}
+
+	LogPrintf("Suppression du post %d", id)
+
+	if imagesFound {
+		for _, img := range images {
+			if strings.HasPrefix(img, fmt.Sprintf("/static/uploads/%d", item.Id)) {
+				LogPrintf("- Suppression de l'image %s", img)
+				os.Remove(img)
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Article supprimé avec succès"})
