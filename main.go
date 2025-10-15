@@ -540,33 +540,33 @@ func WithRequestID(requestID string) zerolog.Logger {
 }
 
 // Debug logue un message de debug
-func LogDebug(msg string) *zerolog.Event {
-	return log.Debug().Str("msg", msg)
+func LogDebug(msg string) {
+	log.Debug().Msg(msg)
 }
 
 // Info logue un message d'information
-func LogInfo(msg string) *zerolog.Event {
-	return log.Info().Str("msg", msg)
+func LogInfo(msg string) {
+	log.Info().Msg(msg)
 }
 
 // Info logue avec printf
-func LogPrintf(format string, a ...any) *zerolog.Event {
-	return log.Info().Str("msg", fmt.Sprintf(format, a...))
+func LogPrintf(format string, a ...any) {
+	log.Info().Msg(fmt.Sprintf(format, a...))
 }
 
 // Warn logue un avertissement
-func LogWarn(msg string) *zerolog.Event {
-	return log.Warn().Str("msg", msg)
+func LogWarn(msg string) {
+	log.Warn().Msg(msg)
 }
 
 // Error logue une erreur
-func LogError(err error, msg string) *zerolog.Event {
-	return log.Error().Err(err).Str("msg", msg)
+func LogError(err error, msg string) {
+	log.Error().Err(err).Msg(msg)
 }
 
 // Fatal logue une erreur fatale et arrête le programme
-func LogFatal(err error, msg string) *zerolog.Event {
-	return log.Fatal().Err(err).Str("msg", msg)
+func LogFatal(err error, msg string) {
+	log.Fatal().Err(err).Str("msg", msg)
 }
 
 func NewRedisStore(client *redis.Client) *RedisStore {
@@ -649,7 +649,7 @@ func (cap *captchas) generateCaptcha(production bool) (map[string]any, error) {
 	}
 
 	if !production {
-		fmt.Printf("CAPTCHA généré - ID: %s, Réponse: %s\n", id, answer)
+		fmt.Printf("CAPTCHA généré - ID: %s, Réponse: %s", id, answer)
 		data["answer"] = answer
 	}
 
@@ -729,7 +729,7 @@ func handleExampleCreation(filename string) error {
 		return fmt.Errorf("erreur création exemple: %v", err)
 	}
 
-	fmt.Printf("✅ Fichier exemple créé: %s\n", filename)
+	fmt.Printf("✅ Fichier exemple créé: %s", filename)
 	fmt.Println("⚠️  Admin_pass sera automatiquement hash en argon2 dans Admin_hash au premier lancement")
 	return nil
 }
@@ -1623,15 +1623,15 @@ func setRoutes(r *gin.Engine) {
 
 func startServer(r *gin.Engine) {
 	if configuration.Listen.Metrics != "" {
-		LogPrintf("Metrics disponible sur http://%s/metrics\n", configuration.Listen.Metrics)
+		LogPrintf("Metrics disponible sur http://%s/metrics", configuration.Listen.Metrics)
 		go func() {
 			http.Handle("/metrics", promhttp.Handler())
 			http.ListenAndServe(configuration.Listen.Metrics, nil)
 		}()
 	}
 
-	LogPrintf("Website démarré sur http://%s\n", configuration.Listen.Website)
-	LogPrintf("Admin: http://%s/admin/login\n", configuration.Listen.Website)
+	LogPrintf("Website démarré sur http://%s", configuration.Listen.Website)
+	LogPrintf("Admin: http://%s/admin/login", configuration.Listen.Website)
 	r.Run(configuration.Listen.Website)
 }
 
