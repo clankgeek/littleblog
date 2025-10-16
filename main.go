@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -801,7 +802,13 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 
 	BlogsId = make(map[uint]string, len(conf.Blogs))
 	Blogs = make(map[string]BlogsConfig, len(conf.Blogs))
+	var idfound []uint
 	for _, item := range conf.Blogs {
+		if slices.Contains(idfound, item.Id) {
+			return nil, fmt.Errorf("l'id dans les blogs doit etre unique")
+		}
+		idfound = append(idfound, item.Id)
+
 		item.LinkRSS, err = GenerateDynamicRSS(item.Menu, item.SiteName)
 		if err != nil {
 			return nil, err
@@ -1884,7 +1891,7 @@ func adminDashboardHandler(c *gin.Context) {
 		RecentPosts   []Post
 	}
 
-	db.Model(&Post{}).Where("blog_id = ?").Count(&stats.TotalPosts)
+	db.Model(&Post{}).Where("blog_id = ?", item.Id).Count(&stats.TotalPosts)
 	db.Model(&Comment{}).
 		Joins("JOIN posts ON posts.id = comments.post_id").
 		Where("posts.blog_id = ?", item.Id).
