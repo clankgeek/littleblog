@@ -78,7 +78,7 @@
             {{- range .stats.RecentPosts }}
             <div class="recent-post">
                 <div class="post-info">
-                    <h4>{{ .Title }}</h4>
+                    <h4> <a href="/admin/posts/{{ .ID }}/edit">{{ .Title }}</a></h4>
                     <div class="post-meta">
                         <span><img src="/files/img/bust.svg" class="icon"> {{ .Author }}</span>
                         <span><img src="/files/img/calendar.svg" class="icon"> {{ .CreatedAt.Format "02/01/2006 à 15:04" }}</span>

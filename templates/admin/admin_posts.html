@@ -57,7 +57,7 @@
                         {{- range .posts }}
                         <tr>
                             <td>
-                                <div class="post-title">{{ .Title }}</div>
+                                <div class="post-title"><a href="/admin/posts/{{ .ID }}/edit">{{ .Title }}</a></div>
                                 <div class="post-excerpt">{{ .Excerpt }}</div>
                             </td>
                             <td>

@@ -216,6 +216,11 @@
     justify-content: center;
 }
 
+a {
+    text-decoration: none;
+    color: var(--dark-color);
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .post-excerpt {

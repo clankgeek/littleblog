@@ -81,6 +81,7 @@ img {
     font-size: 2em;
     border-bottom: 3px solid var(--primary-color);
     padding-bottom: 10px;
+    color: var(--primary-color);
 }
 
 .article-content h2 {
