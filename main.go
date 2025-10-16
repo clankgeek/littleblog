@@ -389,8 +389,6 @@ func initLogger(cfg LoggerConfig, production bool) {
 			NoColor:    false,
 		}
 		writers = append(writers, consoleWriter)
-	} else {
-		writers = append(writers, os.Stdout)
 	}
 
 	// Writer pour le fichier si activé
@@ -409,6 +407,10 @@ func initLogger(cfg LoggerConfig, production bool) {
 			log.Fatal().Err(err).Msg("failed to setup syslog writer")
 		}
 		writers = append(writers, syslogWriter)
+	}
+
+	if len(writers) == 0 {
+		writers = append(writers, os.Stdout)
 	}
 
 	// Créer un multi-writer
@@ -1780,6 +1782,7 @@ func pageNotFound(c *gin.Context, title string) {
 		"version":     VERSION,
 		"BuildID":     BuildID,
 		"menu":        GenerateMenu(item.Menu, ""),
+		"renderTime":  getRenderTime(c),
 	})
 }
 
@@ -1917,6 +1920,7 @@ func adminDashboardHandler(c *gin.Context) {
 		"version":     VERSION,
 		"BuildID":     BuildID,
 		"memories":    getMemUsage(),
+		"renderTime":  getRenderTime(c),
 	})
 }
 
@@ -2060,6 +2064,7 @@ func adminPostsHandler(c *gin.Context) {
 		"version":     VERSION,
 		"BuildID":     BuildID,
 		"memories":    getMemUsage(),
+		"renderTime":  getRenderTime(c),
 	})
 }
 
@@ -2092,6 +2097,7 @@ func newPostPageHandler(c *gin.Context) {
 		"optionsCategory": getOptionsCategory(item),
 		"BuildID":         BuildID,
 		"memories":        getMemUsage(),
+		"renderTime":      getRenderTime(c),
 	})
 }
 
@@ -2130,6 +2136,7 @@ func editPostPageHandler(c *gin.Context) {
 		"optionsCategory": getOptionsCategory(item),
 		"BuildID":         BuildID,
 		"memories":        getMemUsage(),
+		"renderTime":      getRenderTime(c),
 	})
 }
 
