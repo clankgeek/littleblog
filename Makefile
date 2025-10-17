@@ -20,7 +20,7 @@ GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
-.PHONY: all build clean test test-unit test-integration test-bench deps help install run dev example cross-compile deb deb-clean
+.PHONY: all build clean test test-unit test-integration test-bench deps help run example deb deb-clean
 
 # Default target
 all: help
@@ -37,13 +37,6 @@ deps:
 	@echo "📦 Installing dependencies..."
 	$(GOMOD) download
 	@echo "✅ Dependencies installed"
-
-# Initialize Go module if not exists
-init:
-	@if [ ! -f go.mod ]; then \
-		echo "🎯 Initializing Go module..."; \
-		$(GOMOD) init littleblog; \
-	fi
 
 # Clean build artifacts
 clean:
@@ -108,24 +101,6 @@ lint:
 	@$(GOCMD) fmt ./...
 	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run; fi
 
-# Install the binary to system PATH
-install: build
-	@echo "🚀 Installing to system..."
-	sudo cp $(BUILD_DIR)/$(BINARY_NAME) /usr/local/bin/
-	sudo chmod +x /usr/local/bin/$(BINARY_NAME)
-	@echo "✅ Installed to /usr/local/bin/$(BINARY_NAME)"
-
-# Uninstall from system
-uninstall:
-	@echo "🗑️ Uninstalling..."
-	sudo rm -f /usr/local/bin/$(BINARY_NAME)
-	@echo "✅ Uninstalled"
-
-# Run the application in development mode
-dev: build
-	@echo "🏃 Running in development mode..."
-	sudo ./$(BUILD_DIR)/$(BINARY_NAME) -config littleblog.yaml
-
 # Run with custom config
 run: build
 	@echo "🏃 Running $(BINARY_NAME)..."
@@ -143,39 +118,6 @@ example: build
 	./$(BUILD_DIR)/$(BINARY_NAME) -example
 	@echo "✅ Example configuration created: littleblog.yaml"
 	@echo "💡 Edit the file before running 'make run'"
-
-# Cross-compile for multiple platforms
-cross-compile: deps
-	@echo "🌍 Cross-compiling for multiple platforms..."
-	@mkdir -p $(BUILD_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		output=$(BUILD_DIR)/$(BINARY_NAME)-$$os-$$arch; \
-		if [ "$$os" = "windows" ]; then output=$$output.exe; fi; \
-		echo "Building for $$os/$$arch..."; \
-		GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $$output .; \
-	done
-	@echo "✅ Cross-compilation complete"
-
-# Create release archives
-release: cross-compile
-	@echo "📦 Creating release archives..."
-	@mkdir -p $(BUILD_DIR)/releases
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		binary=$(BUILD_DIR)/$(BINARY_NAME)-$$os-$$arch; \
-		if [ "$$os" = "windows" ]; then binary=$$binary.exe; fi; \
-		archive=$(BUILD_DIR)/releases/$(BINARY_NAME)-$(VERSION)-$$os-$$arch; \
-		if [ "$$os" = "windows" ]; then \
-			zip -j $$archive.zip $$binary README.md; \
-		else \
-			tar -czf $$archive.tar.gz -C $(BUILD_DIR) $$(basename $$binary) -C .. README.md; \
-		fi; \
-		echo "Created: $$archive"; \
-	done
-	@echo "✅ Release archives created in $(BUILD_DIR)/releases/"
 
 # Build Debian package for linux/amd64
 deb: deps
@@ -267,54 +209,6 @@ deb-clean:
 	@rm -f $(BUILD_DIR)/*.deb
 	@echo "✅ Debian artifacts cleaned"
 
-# Quick setup for new users
-setup: init deps example
-	@echo "🎉 Setup complete!"
-	@echo ""
-	@echo "Next steps:"
-	@echo "1. Edit littleblog.yaml with your domains and backends"
-	@echo "2. Run 'make run' to start the proxy"
-	@echo "3. Or run 'make install' to install system-wide"
-
-# Development server with auto-reload (requires 'entr')
-watch:
-	@if ! command -v entr > /dev/null; then \
-		echo "❌ 'entr' is required for watch mode"; \
-		echo "💡 Install with: apt install entr (Ubuntu) or brew install entr (macOS)"; \
-		exit 1; \
-	fi
-	@echo "👀 Watching for changes (Ctrl+C to stop)..."
-	find . -name "*.go" | entr -r make dev
-
-# Generate systemd service file
-systemd: install
-	@echo "⚙️ Creating systemd service..."
-	@echo '[Unit]' > /tmp/littleblog.service
-	@echo 'Description=littleblog - Reverse Proxy with ACME' >> /tmp/littleblog.service
-	@echo 'After=network.target' >> /tmp/littleblog.service
-	@echo '' >> /tmp/littleblog.service
-	@echo '[Service]' >> /tmp/littleblog.service
-	@echo 'Type=simple' >> /tmp/littleblog.service
-	@echo 'User=root' >> /tmp/littleblog.service
-	@echo 'WorkingDirectory=/opt/littleblog' >> /tmp/littleblog.service
-	@echo 'ExecStart=/usr/local/bin/littleblog -config /opt/littleblog/littleblog.yaml' >> /tmp/littleblog.service
-	@echo 'Restart=always' >> /tmp/littleblog.service
-	@echo 'RestartSec=5' >> /tmp/littleblog.service
-	@echo 'StandardOutput=journal' >> /tmp/littleblog.service
-	@echo 'StandardError=journal' >> /tmp/littleblog.service
-	@echo '' >> /tmp/littleblog.service
-	@echo '[Install]' >> /tmp/littleblog.service
-	@echo 'WantedBy=multi-user.target' >> /tmp/littleblog.service
-	sudo mv /tmp/littleblog.service /etc/systemd/system/
-	sudo mkdir -p /opt/littleblog
-	sudo cp littleblog.yaml /opt/littleblog/ 2>/dev/null || true
-	sudo systemctl daemon-reload
-	@echo "✅ Systemd service created"
-	@echo "💡 Commands:"
-	@echo "   sudo systemctl enable littleblog     # Enable auto-start"
-	@echo "   sudo systemctl start littleblog      # Start service"
-	@echo "   sudo systemctl status littleblog     # Check status"
-
 # Check system requirements
 check:
 	@echo "🔍 Checking system requirements..."
@@ -335,28 +229,17 @@ help:
 	@echo "🚀 littleblog Makefile Commands"
 	@echo ""
 	@echo "📦 Setup & Dependencies:"
-	@echo "  make setup          - Complete setup for new users"
-	@echo "  make init           - Initialize Go module"
 	@echo "  make deps           - Install dependencies"
 	@echo ""
 	@echo "🔨 Build Commands:"
 	@echo "  make build          - Build the binary"
-	@echo "  make cross-compile  - Build for multiple platforms"
-	@echo "  make release        - Create release archives"
 	@echo "  make deb            - Create Debian package (.deb) for linux/amd64"
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make deb-clean      - Clean debian build artifacts"
 	@echo ""
 	@echo "🏃 Run Commands:"
 	@echo "  make run            - Build and run with littleblog.yaml"
-	@echo "  make dev            - Build and run in development mode"
-	@echo "  make watch          - Auto-rebuild on file changes (requires entr)"
 	@echo "  make example        - Create example configuration"
-	@echo ""
-	@echo "🚀 Installation:"
-	@echo "  make install        - Install to /usr/local/bin"
-	@echo "  make uninstall      - Remove from system"
-	@echo "  make systemd        - Create systemd service"
 	@echo ""
 	@echo "🔧 Utilities:"
 	@echo "  make test           - Run unit tests with coverage"
