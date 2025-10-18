@@ -328,3 +328,79 @@ textarea.form-control {
     border-top-left-radius: 0;
     border-top-right-radius: 0;
 }
+
+.emoji-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.emoji-picker {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 12px;
+    margin-top: 5px;
+    min-width: 320px;
+    max-width: 400px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.emoji-categories {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.emoji-category-title {
+    font-size: 12px;
+    font-weight: bold;
+    color: #666;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+    gap: 4px;
+}
+
+.emoji-grid button {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 20px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.emoji-grid button:hover {
+    background: #f0f0f0;
+    transform: scale(1.2);
+}
+
+.emoji-picker-footer {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+    text-align: center;
+    color: #999;
+}
+
+/* Style pour le bouton émoji dans la toolbar */
+.toolbar-btn {
+    font-size: 18px;
+    line-height: 1;
+}

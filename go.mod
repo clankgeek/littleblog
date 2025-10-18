@@ -16,6 +16,7 @@ require (
 	github.com/tdewolff/minify/v2 v2.24.4
 	github.com/ulule/limiter/v3 v3.11.2
 	github.com/yuin/goldmark v1.7.13
+	github.com/yuin/goldmark-emoji v1.0.6
 	golang.org/x/image v0.32.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1

@@ -66,11 +66,9 @@
                         Affiché sur la page d'accueil et dans les résultats de recherche. Si vide, l'extrait sera fait automatiquement a partir du contenu.
                     </div>
                 </div>
-
                 <!-- Contenu -->
                 <div class="form-group">
                     <label class="form-label" for="content"><img src="/files/img/openbook.svg" class="icon"> Contenu (Markdown) *</label>
-                    
                     <!-- Barre d'outils pour l'éditeur -->
                     <div class="editor-toolbar">
                         <button type="button" @click="insertBold" class="toolbar-btn" title="Gras">
@@ -88,6 +86,78 @@
                         <button type="button" @click="insertHeading" class="toolbar-btn" title="Titre">
                             H
                         </button>
+                        <div class="emoji-dropdown" x-data="{ emojiOpen: false }">
+                        <button type="button" 
+                                @click="emojiOpen = !emojiOpen" 
+                                @click.away="emojiOpen = false"
+                                class="toolbar-btn" 
+                                title="Insérer un émoji">
+                            &#x1F60A;
+                        </button>
+                        <!-- Panel de sélection d'émojis -->
+                        <div x-show="emojiOpen" 
+                            x-transition
+                            class="emoji-picker">
+                            <div class="emoji-categories">
+                                <!-- Émojis fréquents -->
+                                <div class="emoji-category">
+                                    <div class="emoji-category-title">Fréquents</div>
+                                    <div class="emoji-grid">
+                                        <button type="button" @click="insertEmoji(':smile:'); emojiOpen = false" title="smile">&#x1F604;</button>
+                                        <button type="button" @click="insertEmoji(':grin:'); emojiOpen = false" title="grin">&#x1F601;</button>
+                                        <button type="button" @click="insertEmoji(':joy:'); emojiOpen = false" title="joy">&#x1F602;</button>
+                                        <button type="button" @click="insertEmoji(':heart_eyes:'); emojiOpen = false" title="heart_eyes">&#x1F60D;</button>
+                                        <button type="button" @click="insertEmoji(':wink:'); emojiOpen = false" title="wink">&#x1F609;</button>
+                                        <button type="button" @click="insertEmoji(':thinking:'); emojiOpen = false" title="thinking">&#x1F914;</button>
+                                        <button type="button" @click="insertEmoji(':thumbsup:'); emojiOpen = false" title="thumbsup">&#x1F44D;</button>
+                                        <button type="button" @click="insertEmoji(':thumbsdown:'); emojiOpen = false" title="thumbsdown">&#x1F44E;</button>
+                                        <button type="button" @click="insertEmoji(':clap:'); emojiOpen = false" title="clap">&#x1F44F;</button>
+                                        <button type="button" @click="insertEmoji(':pray:'); emojiOpen = false" title="pray">&#x1F64F;</button>
+                                        <button type="button" @click="insertEmoji(':heart:'); emojiOpen = false" title="heart">&#x2764;&#xFE0F;</button>
+                                        <button type="button" @click="insertEmoji(':fire:'); emojiOpen = false" title="fire">&#x1F525;</button>
+                                        <button type="button" @click="insertEmoji(':star:'); emojiOpen = false" title="star">&#x2B50;</button>
+                                        <button type="button" @click="insertEmoji(':100:'); emojiOpen = false" title="100">&#x1F4AF;</button>
+                                        <button type="button" @click="insertEmoji(':rocket:'); emojiOpen = false" title="rocket">&#x1F680;</button>
+                                    </div>
+                                </div>
+                                <!-- Émojis visages -->
+                                <div class="emoji-category">
+                                    <div class="emoji-category-title">Visages</div>
+                                    <div class="emoji-grid">
+                                        <button type="button" @click="insertEmoji(':blush:'); emojiOpen = false" title="blush">&#x1F60A;</button>
+                                        <button type="button" @click="insertEmoji(':slightly_smiling_face:'); emojiOpen = false" title="slightly_smiling">&#x1F642;</button>
+                                        <button type="button" @click="insertEmoji(':neutral_face:'); emojiOpen = false" title="neutral">&#x1F610;</button>
+                                        <button type="button" @click="insertEmoji(':confused:'); emojiOpen = false" title="confused">&#x1F615;</button>
+                                        <button type="button" @click="insertEmoji(':cry:'); emojiOpen = false" title="cry">&#x1F622;</button>
+                                        <button type="button" @click="insertEmoji(':sob:'); emojiOpen = false" title="sob">&#x1F62D;</button>
+                                        <button type="button" @click="insertEmoji(':angry:'); emojiOpen = false" title="angry">&#x1F620;</button>
+                                        <button type="button" @click="insertEmoji(':rage:'); emojiOpen = false" title="rage">&#x1F621;</button>
+                                        <button type="button" @click="insertEmoji(':scream:'); emojiOpen = false" title="scream">&#x1F631;</button>
+                                        <button type="button" @click="insertEmoji(':sunglasses:'); emojiOpen = false" title="sunglasses">&#x1F60E;</button>
+                                    </div>
+                                </div>
+                                <!-- Symboles -->
+                                <div class="emoji-category">
+                                    <div class="emoji-category-title">Symboles</div>
+                                    <div class="emoji-grid">
+                                        <button type="button" @click="insertEmoji(':white_check_mark:'); emojiOpen = false" title="check">&#x2705;</button>
+                                        <button type="button" @click="insertEmoji(':x:'); emojiOpen = false" title="x">&#x274C;</button>
+                                        <button type="button" @click="insertEmoji(':warning:'); emojiOpen = false" title="warning">&#x26A0;&#xFE0F;</button>
+                                        <button type="button" @click="insertEmoji(':bulb:'); emojiOpen = false" title="bulb">&#x1F4A1;</button>
+                                        <button type="button" @click="insertEmoji(':bell:'); emojiOpen = false" title="bell">&#x1F514;</button>
+                                        <button type="button" @click="insertEmoji(':pushpin:'); emojiOpen = false" title="pushpin">&#x1F4CC;</button>
+                                        <button type="button" @click="insertEmoji(':memo:'); emojiOpen = false" title="memo">&#x1F4DD;</button>
+                                        <button type="button" @click="insertEmoji(':email:'); emojiOpen = false" title="email">&#x2709;&#xFE0F;</button>
+                                        <button type="button" @click="insertEmoji(':sparkles:'); emojiOpen = false" title="sparkles">&#x2728;</button>
+                                        <button type="button" @click="insertEmoji(':zap:'); emojiOpen = false" title="zap">&#x26A1;</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="emoji-picker-footer">
+                                <small>Cliquez sur un émoji pour l'insérer (code :emoji:)</small>
+                            </div>
+                        </div>
+                    </div>
                         <div class="toolbar-separator"></div>
                         <button type="button" @click="$refs.imageUpload.click()" class="toolbar-btn toolbar-btn-primary" title="Insérer une image">
                             <img src="/files/img/camera.svg" class="icon"> Image
@@ -98,15 +168,13 @@
                             accept="image/*" 
                             style="display: none;">
                     </div>
-                    
                     <textarea x-model="post.content" 
                             x-ref="contentEditor"
                             @input="updatePreview"
                             id="content" 
                             class="form-control"
                             placeholder="# Votre titre principal..."
-                            required></textarea>
-                            
+                            required></textarea>   
                     <!-- Zone de progression d'upload -->
                     <div x-show="uploading" class="upload-progress">
                         <div class="progress-bar">
@@ -114,14 +182,12 @@
                         </div>
                         <span class="progress-text">Upload en cours... <span x-text="uploadProgress"></span>%</span>
                     </div>
-                    
                     <div class="form-help">
                         <strong>Support Markdown :</strong> **gras**, *italique*, `code`, [liens](url), images, listes, etc.
                         <br>Cliquez sur <img src="/files/img/camera.svg" class="icon"> pour uploader une image (max 5MB).
                     </div>
                 </div>
             </div>
-
             <div class="form-sidebar">
                 <!-- Actions de sauvegarde -->
                 <div class="sidebar-card">
@@ -268,6 +334,10 @@ document.addEventListener('alpine:init', () => {
             } catch (error) {
                 console.error('Erreur auto-save:', error);
             }
+        },
+
+        insertEmoji(emojiCode) {
+            this.insertAtCursor(emojiCode + ' ');
         },
 
         addTag() {

@@ -50,6 +50,7 @@ import (
 	ginlimiter "github.com/ulule/limiter/v3/drivers/middleware/gin"
 	"github.com/ulule/limiter/v3/drivers/store/memory"
 	"github.com/yuin/goldmark"
+	emoji "github.com/yuin/goldmark-emoji"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
@@ -863,6 +864,7 @@ func initMarkdown() {
 			extension.Table,
 			extension.Strikethrough,
 			extension.TaskList,
+			emoji.Emoji,
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
