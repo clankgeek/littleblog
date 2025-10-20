@@ -1127,11 +1127,14 @@ func GenerateMenu(items []MenuItem, category string) template.HTML {
 func GenerateDynamicRSS(Menu []MenuItem, SiteName string) (template.HTML, error) {
 	rssStr := ""
 	for _, item := range Menu {
+		if item.Key == "" {
+			continue
+		}
 		slugifiedKey := slugify(item.Key)
 		if slugifiedKey == "files" || slugifiedKey == "static" {
 			return "", fmt.Errorf("la clé du menu doit etre différente de 'files' et de 'static'")
 		}
-		rssStr += fmt.Sprintf("<link rel=\"alternate\" type=\"application/rss+xml\" title=\"%s - %s\" href=\"/rss.xml/%s\"/>\n", SiteName, slugifiedKey, slugifiedKey)
+		rssStr += fmt.Sprintf("    <link rel=\"alternate\" type=\"application/rss+xml\" title=\"%s - %s\" href=\"/rss.xml/%s\"/>\n", SiteName, slugifiedKey, slugifiedKey)
 	}
 	return safeHtml(rssStr), nil
 }
