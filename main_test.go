@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/andskur/argon2-hashing"
 	"github.com/gin-contrib/sessions"
@@ -112,6 +113,12 @@ func createTestPost(db *gorm.DB) *Post {
 }
 
 // ============= Tests pour les modèles =============
+
+func TestDateTimestamp(t *testing.T) {
+	loc, _ := time.LoadLocation("Europe/Paris")
+	assert.WithinDuration(t, time.Time(time.Date(2025, time.October, 20, 14, 0, 1, 0, loc)), dateTimestamp("20 10 2025"), time.Minute)
+	assert.WithinDuration(t, time.Now(), dateTimestamp(""), time.Minute)
+}
 
 func TestExtractImages(t *testing.T) {
 	s := "yoyo ![monimage.jpg](/static/uploads/1759683627_d4hhlyrc.jpg) oyoyo ![monimage2.jpg](/static/uploads/1759683627_d4hhlxxx.jpg) x"

@@ -227,6 +227,18 @@
                 </div>
                 {{ end }}
 
+                <!-- Date creation -->
+                 {{ if not .isEdit }}
+                <div class="sidebar-card">
+                    <h3 class="sidebar-title"><img src="/files/img/calendar.svg" class="icon"> Date de création</h3>
+                    <input x-model="post.createdAt" 
+                           type="text" 
+                           class="form-control"
+                           placeholder="Date de création">
+                    <div class="form-help">JJ MM AAAA, laisser vide pour automatique</div>
+                </div>
+                {{ end }}
+
                 <!-- Category -->
                 <div class="sidebar-card">
                     <h3 class="sidebar-title"><img src="/files/img/label.svg" class="icon"> Catégorie</h3>
@@ -281,7 +293,7 @@ document.addEventListener('alpine:init', () => {
             excerpt: {{ if .isEdit }}'{{ .post.Excerpt }}'{{ else }}''{{ end }},
             author: {{ if .isEdit }}'{{ .post.Author }}'{{ else }}''{{ end }},
             category: {{ if .isEdit }}'{{ .post.Category }}'{{ else }}''{{ end }},
-            tags: {{ if .isEdit }}{{ .post.TagsList | jsonify }}{{ else }}[]{{ end }}
+            tags: {{ if .isEdit }}{{ .post.TagsList | jsonify }}{{ else }}[]{{ end }},
         },
         uploading: false,
         uploadProgress: 0,

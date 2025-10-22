@@ -63,7 +63,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-const VERSION string = "0.5.0"
+const VERSION string = "0.6.0"
 
 // global instance
 var (
@@ -131,12 +131,13 @@ type LoginRequest struct {
 }
 
 type CreatePostRequest struct {
-	Title    string   `json:"title" binding:"required"`
-	Content  string   `json:"content" binding:"required"`
-	Excerpt  string   `json:"excerpt"`
-	Author   string   `json:"author"`
-	Tags     []string `json:"tags"`
-	Category string   `json:"category"`
+	Title     string   `json:"title" binding:"required"`
+	Content   string   `json:"content" binding:"required"`
+	Excerpt   string   `json:"excerpt"`
+	Author    string   `json:"author"`
+	Tags      []string `json:"tags"`
+	Category  string   `json:"category"`
+	CreatedAt string   `json:"createdAt"`
 }
 
 type UpdatePostRequest struct {
@@ -734,6 +735,23 @@ func createExampleConfig(filename string) error {
 			},
 		},
 	}
+
+	if filename == "/etc/" {
+		example.Production = true
+		if example.Database.Db == "sqlite3" {
+			example.Database.Path = "/var/lib/littleblog/sqlite.db"
+		}
+		example.Logger.File = loggerFileConfig{
+			Enable:     true,
+			Path:       "/var/log/littleblog/littleblog.log",
+			MaxSize:    100,
+			MaxBackups: 30,
+			MaxAge:     7,
+			Compress:   true,
+		}
+		filename = "/etc/littleblog/config.yaml"
+	}
+
 	return writeConfigYaml(filename, example)
 }
 
@@ -2145,6 +2163,19 @@ func editPostPageHandler(c *gin.Context) {
 	})
 }
 
+func dateTimestamp(d string) time.Time {
+	loc, _ := time.LoadLocation("Europe/Paris")
+	if d == "" {
+		return time.Now()
+	}
+	d += " 14:01"
+	t, err := time.ParseInLocation("02 01 2006 15:05", d, loc)
+	if err != nil {
+		return time.Now()
+	}
+	return t
+}
+
 func createPostHandler(c *gin.Context) {
 	var req CreatePostRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2166,13 +2197,14 @@ func createPostHandler(c *gin.Context) {
 	item := getConfItem(c, false, 0)
 
 	post := Post{
-		BlogID:   item.Id,
-		Title:    strings.TrimSpace(req.Title),
-		Content:  strings.TrimSpace(req.Content),
-		Excerpt:  strings.TrimSpace(req.Excerpt),
-		Author:   author,
-		TagsList: req.Tags,
-		Category: slugify(req.Category),
+		BlogID:    item.Id,
+		Title:     strings.TrimSpace(req.Title),
+		Content:   strings.TrimSpace(req.Content),
+		Excerpt:   strings.TrimSpace(req.Excerpt),
+		CreatedAt: dateTimestamp(strings.TrimSpace(req.CreatedAt)),
+		Author:    author,
+		TagsList:  req.Tags,
+		Category:  slugify(req.Category),
 	}
 
 	post.FillExcerpt()

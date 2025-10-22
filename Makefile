@@ -2,15 +2,18 @@
 BINARY_NAME=littleblog
 BUILD_DIR=build
 BUILD_ID := $(shell date +%Y%m%d%H%M%S)
-VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+VERSION=$(shell git describe --tags --always 2>/dev/null || echo "dev")
 LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildID=${BUILD_ID} -s -w"
 PLATFORMS=linux/386 linux/amd64 linux/arm linux/arm64 darwin/amd64 darwin/arm64 windows/386 windows/amd64
 
 # Debian package variables
-DEB_VERSION=$(shell echo $(VERSION) | sed 's/^v//')
-DEB_ARCH=amd64
-DEB_NAME=$(BINARY_NAME)_$(DEB_VERSION)_$(DEB_ARCH)
-DEB_DIR=$(BUILD_DIR)/debian/$(DEB_NAME)
+PKG_NAME=littleblog
+PKG_VERSION=$(shell echo $(VERSION) | sed 's/^v//')
+PKG_MAINTAINER=Clank <clank@ik.me>
+PKG_DESCRIPTION=Un petit blog avec backend en golang
+PKG_HOMEPAGE=https://github.com/clankgeek/littleblog
+DEB_DIR=$(BUILD_DIR)/deb
+DEB_PKG_DIR=$(DEB_DIR)/$(PKG_NAME)_$(PKG_VERSION)
 
 # Go parameters
 GOCMD=CGO_ENABLED=1 go
@@ -122,85 +125,101 @@ example: build
 # Build Debian package for linux/amd64
 deb: deps
 	@echo "📦 Building Debian package..."
-	@echo "Version: $(DEB_VERSION)"
+	@mkdir -p $(DEB_PKG_DIR)/DEBIAN
+	@mkdir -p $(DEB_PKG_DIR)/usr/bin
+	@mkdir -p $(DEB_PKG_DIR)/etc/littleblog
+	@mkdir -p $(DEB_PKG_DIR)/etc/systemd/system
+	@mkdir -p $(DEB_PKG_DIR)/var/lib/littleblog/certs
+	@mkdir -p $(DEB_PKG_DIR)/var/log/littleblog
 	
-	# Build binary for linux/amd64
-	@mkdir -p $(BUILD_DIR)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 .
+	@echo "🔨 Building binary for linux/amd64..."
+	@GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DEB_PKG_DIR)/usr/bin/$(BINARY_NAME) .
 	
-	# Create debian package structure
-	@mkdir -p $(DEB_DIR)/DEBIAN
-	@mkdir -p $(DEB_DIR)/usr/local/bin
-	@mkdir -p $(DEB_DIR)/etc/littleblog
-	@mkdir -p $(DEB_DIR)/etc/systemd/system
-	@mkdir -p $(DEB_DIR)/usr/share/doc/littleblog
+	@echo "📝 Creating control file..."
+	@echo "Package: $(PKG_NAME)" > $(DEB_PKG_DIR)/DEBIAN/control
+	@echo "Version: $(PKG_VERSION)" >> $(DEB_PKG_DIR)/DEBIAN/control
+	@echo "Section: net" >> $(DEB_PKG_DIR)/DEBIAN/control
+	@echo "Priority: optional" >> $(DEB_PKG_DIR)/DEBIAN/control
+	@echo "Architecture: amd64" >> $(DEB_PKG_DIR)/DEBIAN/control
+	@echo "Maintainer: $(PKG_MAINTAINER)" >> $(DEB_PKG_DIR)/DEBIAN/control
+	@echo "Description: $(PKG_DESCRIPTION)" >> $(DEB_PKG_DIR)/DEBIAN/control
+	@echo " Un blog avec backend en golang" >> $(DEB_PKG_DIR)/DEBIAN/control
+	@echo "Homepage: $(PKG_HOMEPAGE)" >> $(DEB_PKG_DIR)/DEBIAN/control
 	
-	# Copy binary
-	@cp $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(DEB_DIR)/usr/local/bin/$(BINARY_NAME)
-	@chmod +x $(DEB_DIR)/usr/local/bin/$(BINARY_NAME)
+	@echo "📝 Creating postinst script..."
+	@echo "#!/bin/bash" > $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "set -e" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "# Create littleblog user if it doesn't exist" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "if ! id -u littleblog > /dev/null 2>&1; then" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "    useradd --system --no-create-home --shell /bin/false littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "fi" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "# Set permissions" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "chown -R littleblog:littleblog /var/lib/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "chown -R littleblog:littleblog /var/log/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "chmod 750 /var/lib/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "chmod 750 /var/log/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "# Create example config if it doesn't exist" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "if [ ! -f /etc/littleblog/config.yaml ]; then" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "    /usr/bin/littleblog -example -config /etc/ > /dev/null 2>&1 || true" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "    chown littleblog:littleblog /etc/littleblog/config.yaml" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "fi" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "# Reload systemd" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "systemctl daemon-reload" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "echo '✅ littleblog installed successfully!'" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "echo '📝 Edit /etc/littleblog/config.yaml and run: systemctl start littleblog'" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@chmod 755 $(DEB_PKG_DIR)/DEBIAN/postinst
 	
-	# Create example config if exists
-	@if [ -f "littleblog.yaml" ]; then \
-		cp littleblog.yaml $(DEB_DIR)/etc/littleblog/littleblog.yaml.example; \
-	fi
+	@echo "📝 Creating prerm script..."
+	@echo "#!/bin/bash" > $(DEB_PKG_DIR)/DEBIAN/prerm
+	@echo "set -e" >> $(DEB_PKG_DIR)/DEBIAN/prerm
+	@echo "" >> $(DEB_PKG_DIR)/DEBIAN/prerm
+	@echo "# Stop service if running" >> $(DEB_PKG_DIR)/DEBIAN/prerm
+	@echo "if systemctl is-active --quiet littleblog; then" >> $(DEB_PKG_DIR)/DEBIAN/prerm
+	@echo "    systemctl stop littleblog" >> $(DEB_PKG_DIR)/DEBIAN/prerm
+	@echo "fi" >> $(DEB_PKG_DIR)/DEBIAN/prerm
+	@echo "" >> $(DEB_PKG_DIR)/DEBIAN/prerm
+	@echo "if systemctl is-enabled --quiet littleblog 2>/dev/null; then" >> $(DEB_PKG_DIR)/DEBIAN/prerm
+	@echo "    systemctl disable littleblog" >> $(DEB_PKG_DIR)/DEBIAN/prerm
+	@echo "fi" >> $(DEB_PKG_DIR)/DEBIAN/prerm
+	@chmod 755 $(DEB_PKG_DIR)/DEBIAN/prerm
 	
-	# Create systemd service
-	@echo '[Unit]' > $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'Description=littleblog - Reverse Proxy with ACME' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'After=network.target' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo '' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo '[Service]' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'Type=simple' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'User=root' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'WorkingDirectory=/etc/littleblog' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'ExecStart=/usr/local/bin/littleblog -config /etc/littleblog/littleblog.yaml' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'Restart=always' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'RestartSec=5' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'StandardOutput=journal' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'StandardError=journal' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo '' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo '[Install]' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
-	@echo 'WantedBy=multi-user.target' >> $(DEB_DIR)/etc/systemd/system/littleblog.service
+	@echo "📝 Creating systemd service file..."
+	@echo "[Unit]" > $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "Description=littleblog - un blog avec backend en golang" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "After=network.target" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "[Service]" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "Type=simple" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "User=littleblog" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "Group=littleblog" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "ExecStart=/usr/bin/littleblog -config /etc/littleblog/config.yaml" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "Restart=on-failure" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "RestartSec=5s" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "# Security hardening" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "NoNewPrivileges=true" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "PrivateTmp=true" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "ProtectSystem=strict" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "ProtectHome=true" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "ReadWritePaths=/var/lib/littleblog /var/log/littleblog" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "# Give permissions to bind to ports 80 and 443" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "AmbientCapabilities=CAP_NET_BIND_SERVICE" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "[Install]" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "WantedBy=multi-user.target" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	
-	# Create control file
-	@echo 'Package: $(BINARY_NAME)' > $(DEB_DIR)/DEBIAN/control
-	@echo 'Version: $(DEB_VERSION)' >> $(DEB_DIR)/DEBIAN/control
-	@echo 'Section: web' >> $(DEB_DIR)/DEBIAN/control
-	@echo 'Priority: optional' >> $(DEB_DIR)/DEBIAN/control
-	@echo 'Architecture: $(DEB_ARCH)' >> $(DEB_DIR)/DEBIAN/control
-	@echo 'Maintainer: Your Name <your.email@example.com>' >> $(DEB_DIR)/DEBIAN/control
-	@echo 'Description: Reverse Proxy with automatic ACME/Let'\''s Encrypt support' >> $(DEB_DIR)/DEBIAN/control
-	@echo ' A lightweight reverse proxy with automatic SSL certificate management' >> $(DEB_DIR)/DEBIAN/control
-	@echo ' using ACME protocol and Let'\''s Encrypt.' >> $(DEB_DIR)/DEBIAN/control
-	
-	# Create postinst script
-	@echo '#!/bin/bash' > $(DEB_DIR)/DEBIAN/postinst
-	@echo 'set -e' >> $(DEB_DIR)/DEBIAN/postinst
-	@echo 'systemctl daemon-reload' >> $(DEB_DIR)/DEBIAN/postinst
-	@echo 'echo "✅ littleblog installed successfully"' >> $(DEB_DIR)/DEBIAN/postinst
-	@echo 'echo "📝 Edit /etc/littleblog/littleblog.yaml.example and rename it to littleblog.yaml"' >> $(DEB_DIR)/DEBIAN/postinst
-	@echo 'echo "🚀 Then run: systemctl enable littleblog && systemctl start littleblog"' >> $(DEB_DIR)/DEBIAN/postinst
-	@chmod +x $(DEB_DIR)/DEBIAN/postinst
-	
-	# Create prerm script
-	@echo '#!/bin/bash' > $(DEB_DIR)/DEBIAN/prerm
-	@echo 'set -e' >> $(DEB_DIR)/DEBIAN/prerm
-	@echo 'systemctl stop littleblog 2>/dev/null || true' >> $(DEB_DIR)/DEBIAN/prerm
-	@echo 'systemctl disable littleblog 2>/dev/null || true' >> $(DEB_DIR)/DEBIAN/prerm
-	@chmod +x $(DEB_DIR)/DEBIAN/prerm
-	
-	# Copy documentation if exists
-	@if [ -f "README.md" ]; then \
-		cp README.md $(DEB_DIR)/usr/share/doc/littleblog/; \
-	fi
-	
-	# Build the package
-	@dpkg-deb --build $(DEB_DIR)
-	@mv $(BUILD_DIR)/debian/$(DEB_NAME).deb $(BUILD_DIR)/
-	@echo "✅ Debian package created: $(BUILD_DIR)/$(DEB_NAME).deb"
+	@echo "🔨 Building package..."
+	@dpkg-deb --build $(DEB_PKG_DIR)
+	@mv $(DEB_PKG_DIR).deb $(BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_amd64.deb
+	@echo "✅ Debian package created: $(BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_amd64.deb"
 	@echo ""
-	@echo "📦 Install with: sudo dpkg -i $(BUILD_DIR)/$(DEB_NAME).deb"
-	@echo "🗑️  Remove with: sudo apt remove $(BINARY_NAME)"
+	@echo "📦 Install with: sudo dpkg -i $(BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_amd64.deb"
 
 # Clean debian build artifacts
 deb-clean:
