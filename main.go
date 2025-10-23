@@ -696,7 +696,7 @@ func (cap *captchas) verifyCaptcha(captchaID string, captchaAnswer string) error
 	return nil
 }
 
-func createExampleConfig(filename string) error {
+func createExampleConfig(filename string) (string, error) {
 	example := &Config{
 		Database: DatabaseConfig{
 			Db:   "sqlite",
@@ -737,10 +737,11 @@ func createExampleConfig(filename string) error {
 	}
 
 	if filename == "/etc/" {
+		example.Listen.Website = "127.0.0.1:8000"
+		example.Listen.Metrics = ""
 		example.Production = true
-		if example.Database.Db == "sqlite3" {
-			example.Database.Path = "/var/lib/littleblog/sqlite.db"
-		}
+		example.Database.Path = "/var/lib/littleblog/sqlite.db"
+		example.StaticPath = "/var/lib/littleblog/static"
 		example.Logger.File = loggerFileConfig{
 			Enable:     true,
 			Path:       "/var/log/littleblog/littleblog.log",
@@ -752,7 +753,7 @@ func createExampleConfig(filename string) error {
 		filename = "/etc/littleblog/config.yaml"
 	}
 
-	return writeConfigYaml(filename, example)
+	return filename, writeConfigYaml(filename, example)
 }
 
 func writeConfigYaml(filename string, conf *Config) error {
@@ -768,7 +769,8 @@ func handleExampleCreation(filename string) error {
 	if filename == "" {
 		filename = "littleblog.yaml"
 	}
-	if err := createExampleConfig(filename); err != nil {
+	filename, err := createExampleConfig(filename)
+	if err != nil {
 		return fmt.Errorf("erreur création exemple: %v", err)
 	}
 
@@ -1499,7 +1501,7 @@ func getTemplates(production bool) *template.Template {
 func createExample(shouldCreateExample bool, configFile string) {
 	// Handle example creation
 	if shouldCreateExample {
-		if err := handleExampleCreation(""); err != nil {
+		if err := handleExampleCreation(configFile); err != nil {
 			fmt.Printf("❌ %v\n", err)
 		}
 		os.Exit(1)
@@ -1699,7 +1701,7 @@ func parseCommandLineArgs() (configFile string, shouldCreateExample bool, versio
 	}
 
 	if *example {
-		return "", true, false, nil
+		return *config, true, false, nil
 	}
 
 	if *config == "" {

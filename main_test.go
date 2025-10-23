@@ -197,7 +197,7 @@ func TestCreateExampleConfig(t *testing.T) {
 	tempFile := "test_config.yaml"
 	defer os.Remove(tempFile)
 
-	err := createExampleConfig(tempFile)
+	_, err := createExampleConfig(tempFile)
 	assert.NoError(t, err)
 
 	// Vérifier que le fichier existe

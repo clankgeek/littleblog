@@ -14,8 +14,6 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 - Upload d'images
 - Menu avec différente catégories
 
-## TODO
-
 ## Composants
 
 - Backend
@@ -37,6 +35,10 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
   - Html + CSS (via template Gin)
   - Framework Alpine.js
   - N'utilise pas nodejs
+
+## Limitations
+
+ - Ne gère pas le chiffrage SSL, en production, il faut utiliser un reverse proxy.
 
 ## Compilation
 

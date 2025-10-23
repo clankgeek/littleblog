@@ -123,13 +123,13 @@ example: build
 	@echo "💡 Edit the file before running 'make run'"
 
 # Build Debian package for linux/amd64
-deb: deps
+deb: deb-clean
 	@echo "📦 Building Debian package..."
 	@mkdir -p $(DEB_PKG_DIR)/DEBIAN
 	@mkdir -p $(DEB_PKG_DIR)/usr/bin
 	@mkdir -p $(DEB_PKG_DIR)/etc/littleblog
 	@mkdir -p $(DEB_PKG_DIR)/etc/systemd/system
-	@mkdir -p $(DEB_PKG_DIR)/var/lib/littleblog/certs
+	@mkdir -p $(DEB_PKG_DIR)/var/lib/littleblog/static
 	@mkdir -p $(DEB_PKG_DIR)/var/log/littleblog
 	
 	@echo "🔨 Building binary for linux/amd64..."
@@ -158,8 +158,8 @@ deb: deps
 	@echo "# Set permissions" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "chown -R littleblog:littleblog /var/lib/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "chown -R littleblog:littleblog /var/log/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
-	@echo "chmod 750 /var/lib/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
-	@echo "chmod 750 /var/log/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "chmod 750 /var/lib/littleblog -R" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "chmod 750 /var/log/littleblog -R" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "# Create example config if it doesn't exist" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "if [ ! -f /etc/littleblog/config.yaml ]; then" >> $(DEB_PKG_DIR)/DEBIAN/postinst
@@ -171,7 +171,7 @@ deb: deps
 	@echo "systemctl daemon-reload" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "echo '✅ littleblog installed successfully!'" >> $(DEB_PKG_DIR)/DEBIAN/postinst
-	@echo "echo '📝 Edit /etc/littleblog/config.yaml and run: systemctl start littleblog'" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "echo '📝 Edit /etc/littleblog/config.yaml and run: systemctl --now enable littleblog'" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@chmod 755 $(DEB_PKG_DIR)/DEBIAN/postinst
 	
 	@echo "📝 Creating prerm script..."
@@ -205,7 +205,7 @@ deb: deps
 	@echo "NoNewPrivileges=true" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	@echo "PrivateTmp=true" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	@echo "ProtectSystem=strict" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
-	@echo "ProtectHome=true" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "ProtectHome=false" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	@echo "ReadWritePaths=/var/lib/littleblog /var/log/littleblog" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	@echo "" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	@echo "# Give permissions to bind to ports 80 and 443" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
@@ -217,16 +217,15 @@ deb: deps
 	@echo "🔨 Building package..."
 	@dpkg-deb --build $(DEB_PKG_DIR)
 	@mv $(DEB_PKG_DIR).deb $(BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_amd64.deb
+	@rm -rf $(DEB_DIR)
 	@echo "✅ Debian package created: $(BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_amd64.deb"
 	@echo ""
 	@echo "📦 Install with: sudo dpkg -i $(BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_amd64.deb"
 
 # Clean debian build artifacts
 deb-clean:
-	@echo "🧹 Cleaning debian build artifacts..."
-	@rm -rf $(BUILD_DIR)/debian
+	@rm -rf $(DEB_DIR)
 	@rm -f $(BUILD_DIR)/*.deb
-	@echo "✅ Debian artifacts cleaned"
 
 # Check system requirements
 check:
