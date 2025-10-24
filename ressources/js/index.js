@@ -86,7 +86,7 @@ function infiniteScroll(category, isAuthenticated) {
 
             article.querySelector('[data-author]').textContent = post.author || 'Anonyme';
             article.querySelector('[data-date]').textContent = this.formatDate(post.created_at);
-            article.querySelector('[data-excerpt]').textContent = post.excerpt || '';
+            article.querySelector('[data-excerpt]').innerHTML = post.excerpt || '';
             article.querySelector('[data-comments]').textContent = (post.comments || []).length;
 
             if (post.image) {
@@ -142,9 +142,6 @@ function infiniteScroll(category, isAuthenticated) {
                 day: '2-digit',
                 month: '2-digit',
                 year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
             });
         }
     };

@@ -94,7 +94,7 @@
     transition: var(--transition);
     width: 100%;
     opacity: 0;
-    animation: fadeInUp 0.0s ease forwards;
+    animation: fadeInUp 1.0s ease forwards;
 }
 
 @keyframes fadeInUp {
@@ -244,6 +244,7 @@
 .loader {
     text-align: center;
     padding: 40px;
+    min-height: 80vh;
 }
 
 .loader-spinner {

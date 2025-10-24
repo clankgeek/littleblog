@@ -39,7 +39,7 @@
         </div>
 
         <!-- Loader pendant le chargement -->
-        <div class="loader" x-show="loading" x-cloak>
+        <div class="loader" x-show="loading || posts.length === 0" x-cloak>
             <div class="loader-spinner"></div>
             <p>Chargement des articles...</p>
         </div>

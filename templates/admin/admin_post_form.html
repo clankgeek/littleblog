@@ -78,13 +78,16 @@
                             <em>I</em>
                         </button>
                         <button type="button" @click="insertCode" class="toolbar-btn" title="Code">
-                            <code>&lt;/&gt;</code>
+                            &lt;/&gt;
                         </button>
                         <button type="button" @click="insertLink" class="toolbar-btn" title="Lien">
-                            <img src="/files/img/link.svg" class="icon">
+                            &#128279;
                         </button>
                         <button type="button" @click="insertHeading" class="toolbar-btn" title="Titre">
                             H
+                        </button>
+                        <button type="button" @click="insertImage" class="toolbar-btn" title="Image">
+                            <img src="/files/img/camera.svg" class="icon">
                         </button>
                         <div class="emoji-dropdown" x-data="{ emojiOpen: false }">
                         <button type="button" 
@@ -160,7 +163,7 @@
                     </div>
                         <div class="toolbar-separator"></div>
                         <button type="button" @click="$refs.imageUpload.click()" class="toolbar-btn toolbar-btn-primary" title="Insérer une image">
-                            <img src="/files/img/camera.svg" class="icon"> Image
+                            <img src="/files/img/camera.svg" class="icon"> Upload
                         </button>
                         <input type="file" 
                             x-ref="imageUpload" 
@@ -489,6 +492,12 @@ document.addEventListener('alpine:init', () => {
     insertLink() {
         const selection = this.getSelection();
         const text = '[' + (selection || 'texte du lien') + '](https://exemple.com)';
+        this.insertAtCursor(text);
+    },
+
+    insertImage() {
+        const selection = this.getSelection();
+        const text = '![' + (selection || 'texte de l\'image') + '](https://exemple.com/image.png)';
         this.insertAtCursor(text);
     },
 
