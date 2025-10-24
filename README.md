@@ -104,7 +104,8 @@ blogs:
     hostname: blog.monsite.com # pour le routage en cas de multiple blog
     sitename: Mon Blog
     description: Mon blog perso
-    logoimg: /static/linux.png #logo optionnel, apparait a gauche du sitename
+    logoimg: #logo optionnel, au format png, a mettre dans le repertoire static, exemple /static/monlogo.png
+    favicon: # favicon au format png, a mettre dans le repertoire static, exemple /static/icon.png, si vide, il y a aura un icone linux
     theme: blue # blue, red, green, yellow, purple, cyan, orange, pink, gray, black, ou code couleur exemple: #000000
     menu:
     - key: "linux"

@@ -44,16 +44,19 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
-	htmlmin "github.com/tdewolff/minify/v2/html"
 	"github.com/tdewolff/minify/v2/js"
 	"github.com/ulule/limiter/v3"
 	ginlimiter "github.com/ulule/limiter/v3/drivers/middleware/gin"
 	"github.com/ulule/limiter/v3/drivers/store/memory"
+	stripmd "github.com/writeas/go-strip-markdown"
 	"github.com/yuin/goldmark"
 	emoji "github.com/yuin/goldmark-emoji"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 	"golang.org/x/image/draw"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v3"
@@ -63,7 +66,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-const VERSION string = "0.6.0"
+const VERSION string = "0.7.0"
 
 // global instance
 var (
@@ -165,12 +168,13 @@ type BlogsConfig struct {
 	Hostname    string     `yaml:"hostname"`
 	SiteName    string     `yaml:"sitename"`
 	Logo        string     `yaml:"logoimg"`
+	Favicon     string     `yaml:"favicon"`
 	Description string     `yaml:"description"`
 	Theme       string     `yaml:"theme"`
 	Menu        []MenuItem `yaml:"menu"`
 
-	ThemeCSS string
-	LinkRSS  template.HTML
+	ThemeCSS string        `yaml:"-"`
+	LinkRSS  template.HTML `yaml:"-"`
 }
 
 type LoggerConfig struct {
@@ -267,6 +271,8 @@ type RedisStore struct {
 	expiration time.Duration
 }
 
+type externalLinkTransformer struct{}
+
 // Remplir Excerpt calculé a partir de content
 func (p *Post) FillExcerpt() error {
 	// Générer l'excerpt texte si vide
@@ -274,7 +280,12 @@ func (p *Post) FillExcerpt() error {
 		if p.Excerpt == "" {
 			p.Excerpt = ExtractExcerpt(p.Content, 500)
 		}
-		found, l := ExtractImages(p.Content, true, false)
+		if p.Excerpt != "" {
+			p.Excerpt = RemoveImg(p.Excerpt)
+		}
+		p.FirstImage = ""
+
+		found, l := ExtractImages(p.Content, true, true)
 		if found {
 			p.FirstImage = l[0]
 		}
@@ -282,54 +293,49 @@ func (p *Post) FillExcerpt() error {
 	return nil
 }
 
+func RemoveImg(markdown string) string {
+	reImage := regexp.MustCompile(`!\[.*?\]\(.*?\)`)
+	return reImage.ReplaceAllString(markdown, "")
+}
+
 // ExtractExcerpt génère automatiquement un résumé depuis le contenu Markdown
-func ExtractExcerpt(markdown string, maxLength int) string {
-	if markdown == "" {
-		return ""
+func ExtractExcerpt(text string, maxLength int) string {
+	// Si le texte est déjà assez court
+	if utf8.RuneCountInString(text) <= maxLength {
+		return text
 	}
 
-	// Supprimer les images
-	reImage := regexp.MustCompile(`!\[.*?\]\(.*?\)`)
-	text := reImage.ReplaceAllString(markdown, "")
+	runes := []rune(text)
 
-	// Supprimer les blocs de code
-	reCodeBlock := regexp.MustCompile("(?s)```.*?```")
-	text = reCodeBlock.ReplaceAllString(text, "")
+	// D'abord, chercher une fin de phrase (. ! ?)
+	cutPoint := maxLength
+	for i := maxLength - 1; i >= maxLength-100 && i >= 0; i-- {
+		if runes[i] == '.' || runes[i] == '!' || runes[i] == '?' {
+			// Inclure le point/ponctuation et avancer d'un caractère
+			cutPoint = i + 1
+			break
+		}
+	}
 
-	// Supprimer les titres markdown (garder le texte)
-	reHeaders := regexp.MustCompile(`(?m)^#{1,6}\s+(.*)$`)
-	text = reHeaders.ReplaceAllString(text, "$1")
-
-	// Supprimer les liens mais garder le texte
-	reLinks := regexp.MustCompile(`\[([^\]]+)\]\([^\)]+\)`)
-	text = reLinks.ReplaceAllString(text, "$1")
-
-	// Supprimer le formatage markdown
-	text = regexp.MustCompile(`\*\*([^\*]+)\*\*`).ReplaceAllString(text, "$1") // Gras
-	text = regexp.MustCompile(`\*([^\*]+)\*`).ReplaceAllString(text, "$1")     // Italique
-	text = regexp.MustCompile("`([^`]+)`").ReplaceAllString(text, "$1")        // Code inline
-	text = regexp.MustCompile(`~~([^~]+)~~`).ReplaceAllString(text, "$1")      // Barré
-
-	// Nettoyer les espaces
-	text = strings.TrimSpace(text)
-	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
-
-	// Tronquer intelligemment
-	if utf8.RuneCountInString(text) > maxLength {
-		runes := []rune(text)
-
-		cutPoint := maxLength
+	// Si aucune fin de phrase trouvée, chercher un espace
+	if cutPoint == maxLength {
 		for i := maxLength - 1; i >= maxLength-50 && i >= 0; i-- {
-			if runes[i] == ' ' || runes[i] == '.' || runes[i] == ',' {
+			if runes[i] == ' ' {
 				cutPoint = i
 				break
 			}
 		}
-
-		text = strings.TrimSpace(string(runes[:cutPoint])) + "..."
 	}
 
-	return text
+	result := strings.TrimSpace(string(runes[:cutPoint]))
+
+	// Ajouter "..." seulement si on n'a pas terminé sur une ponctuation
+	lastChar := runes[cutPoint-1]
+	if lastChar != '.' && lastChar != '!' && lastChar != '?' {
+		result += "..."
+	}
+
+	return result
 }
 
 // ExtractImages extrait l'URL des images du Markdown
@@ -727,10 +733,12 @@ func createExampleConfig(filename string) (string, error) {
 				SiteName:    "Mon Blog Tech",
 				Description: "Blog qui utilise littleblog",
 				Logo:        "/static/linux.png",
+				Favicon:     "/files/img/linux.png",
 				Theme:       "blue",
 				Menu: []MenuItem{
-					{Key: "menu1", Value: "Mon premier menu"},
-					{Key: "menu2", Value: "Mon second menu", Img: "/static/linux.png"},
+					{Key: "menu1", Value: "Menu 1"},
+					{Key: "menu2", Value: "Menu 2", Img: "/static/linux.png"},
+					{Link: "https://github.com/clankgeek/littleblog", Value: "Sur github"},
 				},
 			},
 		},
@@ -832,6 +840,10 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 		}
 		idfound = append(idfound, item.Id)
 
+		if item.Favicon == "" {
+			item.Favicon = "/files/img/linux.png"
+		}
+
 		item.LinkRSS, err = GenerateDynamicRSS(item.Menu, item.SiteName)
 		if err != nil {
 			return nil, err
@@ -876,6 +888,21 @@ func loadConfig(filename string) (*Config, error) {
 	return &config, nil
 }
 
+func (t *externalLinkTransformer) Transform(node *ast.Document, reader text.Reader, pc parser.Context) {
+	ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+
+		if link, ok := n.(*ast.Link); ok {
+			link.SetAttributeString("target", []byte("_blank"))
+			link.SetAttributeString("rel", []byte("noopener noreferrer"))
+		}
+
+		return ast.WalkContinue, nil
+	})
+}
+
 // Initialiser le convertisseur Markdown
 func initMarkdown() {
 	md = goldmark.New(
@@ -888,6 +915,9 @@ func initMarkdown() {
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
+			parser.WithASTTransformers(
+				util.Prioritized(&externalLinkTransformer{}, 100),
+			),
 		),
 		goldmark.WithRendererOptions(
 			html.WithHardWraps(),
@@ -979,10 +1009,6 @@ func initDatabase() {
 	var count int64
 	db.Model(&Post{}).Count(&count)
 
-	if count == 0 {
-		seedDatabase()
-	}
-
 	LogInfo("Base de données initialisée avec succès")
 }
 
@@ -991,59 +1017,6 @@ func getFirstMenuKey(conf *BlogsConfig) string {
 		return slugify(conf.Menu[0].Key)
 	}
 	return ""
-}
-
-func seedDatabase() {
-	LogInfo("Création des données d'exemple...")
-
-	posts := []Post{
-		{
-			BlogID: 0,
-			Title:  "Bienvenue sur mon blog",
-			Content: `# Bienvenue !
-
-Ceci est le premier article avec le moteur de blog **littleblog**, qui utilise un backend en **Gin Gonic** et un frontend en **Alpine.js**.
-
-## Fonctionnalités
-
-- Infinity scroll sur la liste des articles
-- Articles avec contenu Markdown
-- Recherche en temps réel
-- Administration des articles
-- Upload d'images
-
-## Composants
-
-- Backend
-  - Language Go
-  - Gin Web Framework
-  - Accès à la base de données avec GORM
-  - Base de données Sqlite3 ou mysql
-  - Middleware Session pour la page d'administration
-  - Templates inclus dans le binaire
-  - Configuration en Yaml (autogénéré par le binaire)
-  - API RESTful (json)
-
-- Frontend
-  - Html + CSS (via template Gin)
-  - Framework Alpine.js
-  - **N'utilise pas nodejs**
-
-N'hésitez pas à laisser un commentaire !`,
-			Excerpt:  "Premier article de présentation du blog avec les technologies utilisées.",
-			Author:   "Admin",
-			TagsList: []string{"accueil", "présentation"},
-			Category: getFirstMenuKey(&configuration.Blogs[0]),
-		},
-	}
-
-	for i := range posts {
-		result := db.Create(&posts[i])
-		if result.Error != nil {
-			LogPrintf("Erreur création post %d: %v", i+1, result.Error)
-		}
-	}
-	LogInfo("Données d'exemple créées avec succès")
 }
 
 func generateRandomString(length int) string {
@@ -1466,12 +1439,8 @@ func generateETag(content []byte) string {
 	return fmt.Sprintf(`"%x"`, hash[:16])
 }
 
-func getTemplates(production bool) *template.Template {
+func getTemplates() *template.Template {
 	m := minify.New()
-
-	if production {
-		m.AddFunc("text/html", htmlmin.Minify)
-	}
 
 	tmpl := template.New("").Funcs(template.FuncMap{
 		"safeCSS":  safeCSS,
@@ -1540,6 +1509,7 @@ func initConfiguration() {
 		fmt.Printf("❌ %v\n", err)
 		os.Exit(1)
 	}
+
 	configuration = conf
 	captcha = newCaptcha(configuration.Database.Redis)
 }
@@ -1588,7 +1558,7 @@ func newServer() *gin.Engine {
 	}
 
 	// parser les templates
-	r.SetHTMLTemplate(getTemplates(configuration.Production))
+	r.SetHTMLTemplate(getTemplates())
 
 	return r
 }
@@ -1711,6 +1681,53 @@ func parseCommandLineArgs() (configFile string, shouldCreateExample bool, versio
 	return *config, false, false, nil
 }
 
+func displayConfiguration(config *Config) {
+	LogPrintf("Littleblog version %s", VERSION)
+
+	LogPrintf("Mode Production %v", config.Production)
+	LogPrintf("Administrateur login %s", config.User.Login)
+
+	LogPrintf("Database")
+	if config.Database.Db == "sqlite" {
+		LogPrintf("  • Type sqlite")
+		LogPrintf("  • Path %s", config.Database.Path)
+	}
+	if config.Database.Db == "mysql" {
+		LogPrintf("  • Type mysql")
+		LogPrintf("  • DSN %s", config.Database.Dsn)
+	}
+	if config.Database.Redis != "" {
+		LogPrintf("  • Cache redis %s", config.Database.Redis)
+	}
+
+	// Logger
+	LogPrintf("Logger en level %s", config.Logger.Level)
+	if config.Logger.File.Enable {
+		LogPrintf("  Log en fichier activé")
+		LogPrintf("  • Path %s", config.Logger.File.Path)
+		LogPrintf("  • Max size %d", config.Logger.File.MaxSize)
+		LogPrintf("  • Max age %d", config.Logger.File.MaxAge)
+		LogPrintf("  • Max backup %d", config.Logger.File.MaxBackups)
+		LogPrintf("  • Compression %v", config.Logger.File.Compress)
+	} else {
+		LogPrintf("  Log en fichier désactivé")
+	}
+	if config.Logger.Syslog.Enable {
+		LogPrintf("  Log en syslog activé")
+		LogPrintf("  • Protocol %s", config.Logger.Syslog.Protocol)
+		LogPrintf("  • Address %s", config.Logger.Syslog.Address)
+		LogPrintf("  • Tag %s", config.Logger.Syslog.Tag)
+		LogPrintf("  • Priority %v", config.Logger.Syslog.Priority)
+	} else {
+		LogPrintf("  Log en syslog désactivé")
+	}
+
+	LogPrintf("Liste des blogs")
+	for _, blog := range config.Blogs {
+		LogPrintf("  • \"%s\" avec l'id %d et le hostname %s", blog.SiteName, blog.Id, blog.Hostname)
+	}
+}
+
 func main() {
 	if BuildID == "" {
 		BuildID = VERSION
@@ -1718,6 +1735,8 @@ func main() {
 
 	initConfiguration()
 	initLogger(configuration.Logger, configuration.Production)
+	displayConfiguration(configuration)
+
 	initMarkdown()
 	initDatabase()
 
@@ -1780,6 +1799,7 @@ func indexHandler(c *gin.Context) {
 		"title":           item.SiteName,
 		"siteName":        item.SiteName,
 		"logo":            item.Logo,
+		"icone":           item.Favicon,
 		"description":     item.Description,
 		"isAuthenticated": isAdmin,
 		"showSearch":      true,
@@ -1802,6 +1822,7 @@ func pageNotFound(c *gin.Context, title string) {
 		"title":       title,
 		"siteName":    item.SiteName,
 		"logo":        item.Logo,
+		"icone":       item.Favicon,
 		"description": "La page que vous recherchez n'existe pas.",
 		"currentYear": time.Now().Year(),
 		"version":     VERSION,
@@ -1835,6 +1856,7 @@ func postHandler(c *gin.Context) {
 		"title":           post.Title,
 		"siteName":        item.SiteName,
 		"logo":            item.Logo,
+		"icone":           item.Favicon,
 		"description":     item.Description,
 		"post":            post,
 		"isAuthenticated": isAdmin,
@@ -1864,6 +1886,7 @@ func loginPageHandler(c *gin.Context) {
 		"title":    "Connexion Admin",
 		"siteName": item.SiteName,
 		"logo":     item.Logo,
+		"icone":    item.Favicon,
 		"version":  VERSION,
 		"BuildID":  BuildID,
 	})
@@ -1935,6 +1958,7 @@ func adminDashboardHandler(c *gin.Context) {
 		"title":       "Dashboard Admin",
 		"siteName":    item.SiteName,
 		"logo":        item.Logo,
+		"icone":       item.Favicon,
 		"pageTitle":   "Dashboard",
 		"pageIcon":    "📊",
 		"currentPage": "dashboard",
@@ -2079,6 +2103,7 @@ func adminPostsHandler(c *gin.Context) {
 		"title":       "Gestion des Articles",
 		"siteName":    item.SiteName,
 		"logo":        item.Logo,
+		"icone":       item.Favicon,
 		"pageTitle":   "Gestion des Articles",
 		"pageIcon":    "📝",
 		"currentPage": "posts",
@@ -2097,7 +2122,9 @@ func getOptionsCategory(item BlogsConfig) template.HTML {
 	var optionsCategory string
 	for _, item := range item.Menu {
 		slugifiedKey := slugify(item.Key)
-		optionsCategory += fmt.Sprintf("<option value=\"%s\">%s</option>", slugifiedKey, slugifiedKey)
+		if slugifiedKey != "" && item.Value != "" {
+			optionsCategory += fmt.Sprintf("<option value=\"%s\">%s</option>", slugifiedKey, item.Value)
+		}
 	}
 	return safeHtml(optionsCategory)
 }
@@ -2111,6 +2138,7 @@ func newPostPageHandler(c *gin.Context) {
 		"title":           "Nouvel Article",
 		"siteName":        item.SiteName,
 		"logo":            item.Logo,
+		"icone":           item.Favicon,
 		"pageTitle":       "Nouvel Article",
 		"pageIcon":        "➕",
 		"currentPage":     "new_post",
@@ -2149,6 +2177,7 @@ func editPostPageHandler(c *gin.Context) {
 		"title":           "Éditer Article",
 		"siteName":        item.SiteName,
 		"logo":            item.Logo,
+		"icone":           item.Favicon,
 		"pageTitle":       "Éditer l'Article",
 		"pageIcon":        "✏️",
 		"currentPage":     "edit_post",
@@ -2334,7 +2363,7 @@ func rssHandler(c *gin.Context) {
 
 	category := c.Param("category")
 	if category != "" {
-		query = query.Where("category = ? AND blogId = ?", slugify(category), item.Id)
+		query = query.Where("category = ? AND blog_id = ?", slugify(category), item.Id)
 	}
 
 	result := query.Find(&posts)
@@ -2356,7 +2385,7 @@ func rssHandler(c *gin.Context) {
 		Channel: Channel{
 			Title:         item.SiteName,
 			Link:          baseURL,
-			Description:   item.Description,
+			Description:   stripmd.Strip(item.Description),
 			Language:      "fr-FR",
 			Generator:     fmt.Sprintf("Littleblog v%s", VERSION),
 			LastBuildDate: time.Now().Format(time.RFC1123Z),
@@ -2390,7 +2419,7 @@ func rssHandler(c *gin.Context) {
 		item := RSSItem{
 			Title:       post.Title,
 			Link:        fmt.Sprintf("%s/post/%d", baseURL, post.ID),
-			Description: description,
+			Description: stripmd.Strip(description),
 			Author:      post.Author,
 			Category:    category,
 			GUID:        fmt.Sprintf("%s/post/%d", baseURL, post.ID),
@@ -2464,6 +2493,11 @@ func getPostsAPI(c *gin.Context) {
 
 	// Déterminer s'il y a encore des posts
 	hasMore := int64(offset+limit) < total
+
+	// Convertir en Markdown le résumé
+	for i, post := range posts {
+		posts[i].Excerpt = string(convertMarkdownToHTML(post.Excerpt))
+	}
 
 	// Envoyer la réponse structurée pour l'infinite scroll
 	c.JSON(http.StatusOK, gin.H{

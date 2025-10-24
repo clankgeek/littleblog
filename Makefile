@@ -2,7 +2,7 @@
 BINARY_NAME=littleblog
 BUILD_DIR=build
 BUILD_ID := $(shell date +%Y%m%d%H%M%S)
-VERSION=$(shell git describe --tags --always 2>/dev/null || echo "dev")
+VERSION=$(shell grep  "const VERSION string = " main.go | egrep "[0-9\.]+" -o)
 LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildID=${BUILD_ID} -s -w"
 PLATFORMS=linux/386 linux/amd64 linux/arm linux/arm64 darwin/amd64 darwin/arm64 windows/386 windows/amd64
 
@@ -156,6 +156,7 @@ deb: deb-clean
 	@echo "fi" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "# Set permissions" >> $(DEB_PKG_DIR)/DEBIAN/postinst
+	@echo "chown -R littleblog:littleblog /ect/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "chown -R littleblog:littleblog /var/lib/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "chown -R littleblog:littleblog /var/log/littleblog" >> $(DEB_PKG_DIR)/DEBIAN/postinst
 	@echo "chmod 750 /var/lib/littleblog -R" >> $(DEB_PKG_DIR)/DEBIAN/postinst
@@ -206,7 +207,7 @@ deb: deb-clean
 	@echo "PrivateTmp=true" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	@echo "ProtectSystem=strict" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	@echo "ProtectHome=false" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
-	@echo "ReadWritePaths=/var/lib/littleblog /var/log/littleblog" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
+	@echo "ReadWritePaths=/var/lib/littleblog /var/log/littleblog /etc/littleblog" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	@echo "" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	@echo "# Give permissions to bind to ports 80 and 443" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service
 	@echo "AmbientCapabilities=CAP_NET_BIND_SERVICE" >> $(DEB_PKG_DIR)/etc/systemd/system/littleblog.service

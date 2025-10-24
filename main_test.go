@@ -1254,7 +1254,7 @@ func TestRSSHandler(t *testing.T) {
 	firstItem := rss.Channel.Items[0]
 	assert.Equal(t, "Post 3", firstItem.Title) // Le plus récent
 	assert.Equal(t, "http://localhost:8080/post/3", firstItem.Link)
-	assert.Equal(t, "Excerpt 3", firstItem.Description)
+	assert.Equal(t, "<p>Excerpt 3</p>\n", firstItem.Description)
 }
 
 // Theme
