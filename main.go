@@ -18,6 +18,7 @@ import (
 	"io/fs"
 	"log/syslog"
 	mrand "math/rand"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -108,6 +109,7 @@ type Post struct {
 	Category    string        `json:"category" gorm:"type:text"`
 	TagsList    []string      `json:"tags" gorm:"-"`
 	Comments    []Comment     `json:"comments,omitempty" gorm:"foreignKey:PostID"`
+	Hide        bool          `json:"hide" gorm:"type:bool"`
 }
 
 type Comment struct {
@@ -141,6 +143,7 @@ type CreatePostRequest struct {
 	Tags      []string `json:"tags"`
 	Category  string   `json:"category"`
 	CreatedAt string   `json:"createdAt"`
+	Hide      bool     `json:"hide"`
 }
 
 type UpdatePostRequest struct {
@@ -149,6 +152,7 @@ type UpdatePostRequest struct {
 	Excerpt  string   `json:"excerpt"`
 	Tags     []string `json:"tags"`
 	Category string   `json:"category"`
+	Hide     bool     `json:"hide"`
 }
 
 type Config struct {
@@ -251,13 +255,20 @@ type Channel struct {
 
 // RSSItem représente un article dans le flux RSS
 type RSSItem struct {
-	Title       string `xml:"title"`
-	Link        string `xml:"link"`
-	Description string `xml:"description"`
-	Author      string `xml:"author,omitempty"`
-	Category    string `xml:"category,omitempty"`
-	GUID        string `xml:"guid"`
-	PubDate     string `xml:"pubDate"`
+	Title       string        `xml:"title"`
+	Link        string        `xml:"link"`
+	Description string        `xml:"description"`
+	Author      string        `xml:"author,omitempty"`
+	Category    string        `xml:"category,omitempty"`
+	GUID        string        `xml:"guid"`
+	PubDate     string        `xml:"pubDate"`
+	Enclosure   *RSSEnclosure `xml:"enclosure"`
+}
+
+type RSSEnclosure struct {
+	URL    string `xml:"url,attr"`
+	Length int64  `xml:"length,attr"`
+	Type   string `xml:"type,attr"`
 }
 
 // Color représente une couleur RGB
@@ -281,7 +292,7 @@ func (p *Post) FillExcerpt() error {
 			p.Excerpt = ExtractExcerpt(p.Content, 500)
 		}
 		if p.Excerpt != "" {
-			p.Excerpt = RemoveImg(p.Excerpt)
+			p.Excerpt = CleanMarkdownForExcerpt(p.Excerpt)
 		}
 		p.FirstImage = ""
 
@@ -293,9 +304,10 @@ func (p *Post) FillExcerpt() error {
 	return nil
 }
 
-func RemoveImg(markdown string) string {
+func CleanMarkdownForExcerpt(content string) string {
+	// supprimer les images
 	reImage := regexp.MustCompile(`!\[.*?\]\(.*?\)`)
-	return reImage.ReplaceAllString(markdown, "")
+	return reImage.ReplaceAllString(content, "")
 }
 
 // ExtractExcerpt génère automatiquement un résumé depuis le contenu Markdown
@@ -1270,6 +1282,8 @@ func middlerwareLogger() gin.HandlerFunc {
 		// Créer l'événement de log avec le niveau approprié
 		var logEvent *zerolog.Event
 		switch {
+		case statusCode == 404:
+			logEvent = log.Debug()
 		case statusCode >= 500:
 			logEvent = log.Error()
 		case statusCode >= 400:
@@ -1591,11 +1605,6 @@ func setRoutes(r *gin.Engine) {
 	metrics := ginmetrics.GetMonitor()
 	metrics.Use(r)
 
-	//default
-	r.NoRoute(func(c *gin.Context) {
-		pageNotFound(c, "Page non trouvée")
-	})
-
 	// Route statiques
 	r.Static("/static/", configuration.StaticPath)
 	r.GET("/files/css/*.css", ServeMinifiedStatic(m))
@@ -1842,7 +1851,7 @@ func postHandler(c *gin.Context) {
 	item := getConfItem(c, false, 0)
 
 	var post Post
-	result := db.Where("blog_id = ?", item.Id).First(&post, uint(id))
+	result := db.Where("blog_id = ? AND NOT hide", item.Id).First(&post, uint(id))
 	if result.Error != nil {
 		pageNotFound(c, "Article non trouvé")
 		return
@@ -1948,7 +1957,7 @@ func adminDashboardHandler(c *gin.Context) {
 		Where("posts.blog_id = ?", item.Id).
 		Count(&stats.TotalComments)
 
-	db.Order("created_at desc").Limit(5).Find(&stats.RecentPosts)
+	db.Where("blog_id = ?", item.Id).Order("created_at desc").Limit(5).Find(&stats.RecentPosts)
 
 	session := sessions.Default(c)
 	username := session.Get("username")
@@ -2023,7 +2032,7 @@ func uploadImageHandler(c *gin.Context) {
 	item := getConfItem(c, false, 0)
 
 	// Créer le dossier uploads s'il n'existe pas
-	uploadsDir := fmt.Sprintf("./static/uploads/%d", item.Id)
+	uploadsDir := fmt.Sprintf("%s/uploads/%d", configuration.StaticPath, item.Id)
 	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur création dossier"})
 		return
@@ -2092,12 +2101,12 @@ func uploadImageHandler(c *gin.Context) {
 }
 
 func adminPostsHandler(c *gin.Context) {
+	item := getConfItem(c, false, 0)
 	var posts []Post
-	db.Order("created_at desc").Find(&posts)
+	db.Where("blog_id = ?", item.Id).Order("created_at desc").Find(&posts)
 
 	session := sessions.Default(c)
 	username := session.Get("username")
-	item := getConfItem(c, false, 0)
 	c.HTML(http.StatusOK, "admin_posts", gin.H{
 		"blogId":      item.Id,
 		"title":       "Gestion des Articles",
@@ -2199,6 +2208,11 @@ func dateTimestamp(d string) time.Time {
 	if d == "" {
 		return time.Now()
 	}
+
+	if matched, _ := regexp.MatchString(`^\d{8}$`, d); matched {
+		d = fmt.Sprintf("%s %s %s", d[0:2], d[2:4], d[4:8])
+	}
+
 	d += " 14:01"
 	t, err := time.ParseInLocation("02 01 2006 15:05", d, loc)
 	if err != nil {
@@ -2236,6 +2250,7 @@ func createPostHandler(c *gin.Context) {
 		Author:    author,
 		TagsList:  req.Tags,
 		Category:  slugify(req.Category),
+		Hide:      req.Hide,
 	}
 
 	post.FillExcerpt()
@@ -2284,6 +2299,7 @@ func updatePostHandler(c *gin.Context) {
 	post.Excerpt = strings.TrimSpace(req.Excerpt)
 	post.TagsList = req.Tags
 	post.Category = slugify(req.Category)
+	post.Hide = req.Hide
 	post.FillExcerpt()
 
 	result = db.Save(&post)
@@ -2353,6 +2369,28 @@ func deletePostHandler(c *gin.Context) {
 // ============= API HANDLERS =============
 
 // rssHandler génère le flux RSS des posts
+func getImageInfo(imagePath string) (size int64, mimeType string, err error) {
+	// Obtenir les informations du fichier
+	fileInfo, err := os.Stat(imagePath)
+	if err != nil {
+		return 0, "", err
+	}
+
+	// Taille du fichier
+	size = fileInfo.Size()
+
+	// Type MIME basé sur l'extension
+	ext := filepath.Ext(imagePath)
+	mimeType = mime.TypeByExtension(ext)
+
+	// Si le type MIME n'est pas trouvé, définir une valeur par défaut
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	return size, mimeType, nil
+}
+
 func rssHandler(c *gin.Context) {
 	var posts []Post
 
@@ -2363,7 +2401,9 @@ func rssHandler(c *gin.Context) {
 
 	category := c.Param("category")
 	if category != "" {
-		query = query.Where("category = ? AND blog_id = ?", slugify(category), item.Id)
+		query = query.Where("blog_id = ? AND NOT hide AND category = ?", item.Id, slugify(category))
+	} else {
+		query = query.Where("blog_id = ? AND NOT hide", item.Id)
 	}
 
 	result := query.Find(&posts)
@@ -2424,6 +2464,20 @@ func rssHandler(c *gin.Context) {
 			Category:    category,
 			GUID:        fmt.Sprintf("%s/post/%d", baseURL, post.ID),
 			PubDate:     post.CreatedAt.Format(time.RFC1123Z),
+			Enclosure:   nil,
+		}
+
+		// on génère l'image dans le rss si il y en a une de présente
+		if post.FirstImage != "" {
+			realpath := strings.Replace(post.FirstImage, "/static", configuration.StaticPath, 1)
+			size, mime, err := getImageInfo(realpath)
+			if err == nil {
+				item.Enclosure = &RSSEnclosure{
+					URL:    post.FirstImage,
+					Length: size,
+					Type:   mime,
+				}
+			}
 		}
 
 		rss.Channel.Items = append(rss.Channel.Items, item)
@@ -2466,7 +2520,7 @@ func getPostsAPI(c *gin.Context) {
 
 	item := getConfItem(c, false, 0)
 	buildQuery := func() *gorm.DB {
-		query := db.Model(&Post{}).Where("blog_id = ?", item.Id)
+		query := db.Model(&Post{}).Where("blog_id = ? AND NOT hide", item.Id)
 		if category != "" {
 			query = query.Where("category = ?", category)
 		}
@@ -2570,7 +2624,7 @@ func addCommentAPI(c *gin.Context) {
 	}
 
 	var post Post
-	result := db.First(&post, uint(postID))
+	result := db.Where("NOT hide").First(&post, uint(postID))
 	if result.Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Article non trouvé"})
 		return

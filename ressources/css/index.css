@@ -137,6 +137,11 @@
     opacity: 0.8;
 }
 
+.article-actions a:hover {
+    color: var(--light-color);
+    text-decoration: none;
+}
+
 .article-meta {
     display: flex;
     justify-content: space-between;
