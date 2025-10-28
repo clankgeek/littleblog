@@ -289,9 +289,9 @@ func (p *Post) FillExcerpt() error {
 	// Générer l'excerpt texte si vide
 	if p.Content != "" {
 		if p.Excerpt == "" {
-			p.Excerpt = ExtractExcerpt(p.Content, 500)
-		}
-		if p.Excerpt != "" {
+			p.Excerpt = CleanMarkdownForExcerpt(p.Content)
+			p.Excerpt = ExtractExcerpt(p.Excerpt, 500)
+		} else {
 			p.Excerpt = CleanMarkdownForExcerpt(p.Excerpt)
 		}
 		p.FirstImage = ""
