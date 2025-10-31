@@ -165,11 +165,6 @@ body {
     color: var(--primary-color);
 }
 
-.search-result-excerpt {
-    font-size: 0.9em;
-    color: #666;
-}
-
 /* Background elements */
 .bg-element {
     position: absolute;

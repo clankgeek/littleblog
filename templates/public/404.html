@@ -55,7 +55,7 @@
                     <template x-for="post in results" :key="post.id">
                         <a :href="'/post/' + post.id" class="search-result">
                             <div class="search-result-title" x-text="post.title"></div>
-                            <div class="search-result-excerpt" x-text="post.excerpt"></div>
+                            <div class="search-result-tags" x-text="post.tags"></div>
                         </a>
                     </template>
                 </div>

@@ -96,20 +96,20 @@ type captchas struct {
 // Models avec tags GORM
 type Post struct {
 	ID          uint          `json:"id" gorm:"primaryKey"`
-	BlogID      uint          `json:"blog_id" gorm:"index"`
+	BlogID      uint          `json:"blog_id" gorm:"index:idx_blog_hide"`
 	Title       string        `json:"title" gorm:"not null"`
 	Content     string        `json:"content" gorm:"type:text;not null"`
 	ContentHTML template.HTML `json:"content_html" gorm:"-"`
 	Excerpt     string        `json:"excerpt"`
 	FirstImage  string        `json:"image" gorm:"type:text"`
 	Author      string        `json:"author" gorm:"not null"`
-	CreatedAt   time.Time     `json:"created_at" gorm:"autoCreateTime"`
+	CreatedAt   time.Time     `json:"created_at" gorm:"autoCreateTime;index"`
 	UpdatedAt   time.Time     `json:"updated_at" gorm:"autoUpdateTime"`
 	Tags        string        `json:"-" gorm:"type:text"`
 	Category    string        `json:"category" gorm:"type:text"`
 	TagsList    []string      `json:"tags" gorm:"-"`
 	Comments    []Comment     `json:"comments,omitempty" gorm:"foreignKey:PostID"`
-	Hide        bool          `json:"hide" gorm:"type:bool"`
+	Hide        bool          `json:"hide" gorm:"type:bool;index:idx_blog_hide"`
 }
 
 type Comment struct {
@@ -2671,8 +2671,8 @@ func searchPostsAPI(c *gin.Context) {
 
 	searchTerm := "%" + query + "%"
 	result := db.Where(
-		"blog_id = ? AND (LOWER(title) LIKE ? OR LOWER(content) LIKE ? OR LOWER(excerpt) LIKE ? OR LOWER(tags) LIKE ?)",
-		item.Id, searchTerm, searchTerm, searchTerm, searchTerm,
+		"blog_id = ? AND NOT hide AND (LOWER(title) LIKE ? OR LOWER(tags) LIKE ?)",
+		item.Id, searchTerm, searchTerm,
 	).Order("created_at desc").Find(&posts)
 
 	if result.Error != nil {
