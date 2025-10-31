@@ -93,8 +93,10 @@ function infiniteScroll(category, isAuthenticated) {
                 article.querySelector('.article-body').dataset.image = post.image;
             }
 
-            const readMore = article.querySelector('[data-readmore]');
-            readMore.href = `/post/${post.ID || post.id}`;
+            const readMores = article.querySelectorAll('[data-readmore]');
+            readMores.forEach(readMore => {
+                readMore.href = `/post/${post.ID || post.id}`;
+            });
 
             // Tags
             const tagsContainer = article.querySelector('[data-tags]');
