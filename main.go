@@ -1454,31 +1454,11 @@ func generateETag(content []byte) string {
 }
 
 func getTemplates() *template.Template {
-	m := minify.New()
-
-	tmpl := template.New("").Funcs(template.FuncMap{
+	return template.Must(template.New("").Funcs(template.FuncMap{
 		"safeCSS":  safeCSS,
 		"escapeJS": escapeJS,
 		"jsonify":  jsonify,
-	})
-
-	// Lire tous les fichiers HTML
-	fs.WalkDir(templatesFS, "templates", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || filepath.Ext(path) != ".html" {
-			return err
-		}
-
-		content, _ := fs.ReadFile(templatesFS, path)
-		minified, err := m.Bytes("text/html", content)
-		if err != nil {
-			minified = content
-		}
-
-		tmpl.New(path).Parse(string(minified))
-		return nil
-	})
-
-	return tmpl
+	}).ParseFS(templatesFS, "templates/*/*.html"))
 }
 
 func createExample(shouldCreateExample bool, configFile string) {
@@ -2564,21 +2544,13 @@ func getPostsAPI(c *gin.Context) {
 }
 
 func getPostAPI(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalide"})
-		return
-	}
-
-	var post Post
-	result := db.First(&post, uint(id))
-	if result.Error != nil {
+	post := getPost(c, c.Param("id"))
+	if post == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Article non trouvé"})
 		return
 	}
 
-	c.JSON(http.StatusOK, post)
+	c.JSON(http.StatusOK, &post)
 }
 
 func deleteCommentAPI(c *gin.Context) {
@@ -2615,17 +2587,24 @@ func getCommentsAPI(c *gin.Context) {
 	c.JSON(http.StatusOK, comments)
 }
 
-func addCommentAPI(c *gin.Context) {
-	idStr := c.Param("id")
+func getPost(c *gin.Context, idStr string) *Post {
 	postID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalide"})
-		return
+		return nil
 	}
 
 	var post Post
-	result := db.Where("NOT hide").First(&post, uint(postID))
+	item := getConfItem(c, false, 0)
+	result := db.Where("blog_id = ? AND NOT hide", item.Id).First(&post, uint(postID))
 	if result.Error != nil {
+		return nil
+	}
+	return &post
+}
+
+func addCommentAPI(c *gin.Context) {
+	post := getPost(c, c.Param("id"))
+	if post == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Article non trouvé"})
 		return
 	}
@@ -2637,19 +2616,19 @@ func addCommentAPI(c *gin.Context) {
 	}
 
 	// controle du captcha
-	err = captcha.verifyCaptcha(req.CaptchaID, req.CaptchaAnswer)
+	err := captcha.verifyCaptcha(req.CaptchaID, req.CaptchaAnswer)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	comment := Comment{
-		PostID:  uint(postID),
+		PostID:  post.ID,
 		Author:  strings.TrimSpace(req.Author),
 		Content: strings.TrimSpace(req.Content),
 	}
 
-	result = db.Create(&comment)
+	result := db.Create(&comment)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur création commentaire"})
 		return
@@ -2678,6 +2657,12 @@ func searchPostsAPI(c *gin.Context) {
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur recherche"})
 		return
+	}
+
+	for i := range posts {
+		posts[i].Content = "x"
+		posts[i].ContentHTML = template.HTML("x")
+		posts[i].Excerpt = "x"
 	}
 
 	c.JSON(http.StatusOK, posts)

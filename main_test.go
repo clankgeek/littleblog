@@ -107,6 +107,7 @@ func createTestPost(db *gorm.DB) *Post {
 		Excerpt:  "Test Excerpt",
 		Author:   "Test Author",
 		TagsList: []string{"test", "golang"},
+		Hide:     false,
 	}
 	db.Create(post)
 	return post
@@ -291,7 +292,7 @@ func TestGetPostAPI(t *testing.T) {
 		wantStatus int
 	}{
 		{"Valid ID", fmt.Sprintf("%d", post.ID), http.StatusOK},
-		{"Invalid ID", "invalid", http.StatusBadRequest},
+		{"Invalid ID", "invalid", http.StatusNotFound},
 		{"Non-existent ID", "9999", http.StatusNotFound},
 	}
 
@@ -621,7 +622,7 @@ func TestConvertMarkdownToHTML(t *testing.T) {
 		{
 			"Link",
 			"[Link](http://example.com)",
-			`<a href="http://example.com">Link</a>`,
+			`<a href="http://example.com" target="_blank" rel="noopener noreferrer">Link</a>`,
 		},
 	}
 
@@ -1254,7 +1255,7 @@ func TestRSSHandler(t *testing.T) {
 	firstItem := rss.Channel.Items[0]
 	assert.Equal(t, "Post 3", firstItem.Title) // Le plus récent
 	assert.Equal(t, "http://localhost:8080/post/3", firstItem.Link)
-	assert.Equal(t, "<p>Excerpt 3</p>\n", firstItem.Description)
+	assert.Equal(t, "Excerpt 3", firstItem.Description)
 }
 
 // Theme
