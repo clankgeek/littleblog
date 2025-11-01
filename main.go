@@ -2,8 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"embed"
 	"encoding/json"
@@ -16,7 +14,12 @@ import (
 	"image/png"
 	"io"
 	"io/fs"
-	"log/syslog"
+	"littleblog/internal/clcaptchas"
+	"littleblog/internal/clconfig"
+	"littleblog/internal/climages"
+	"littleblog/internal/cllog"
+	"littleblog/internal/clmiddleware"
+	"littleblog/internal/gormzerologger"
 	mrand "math/rand"
 	"mime"
 	"net/http"
@@ -33,22 +36,14 @@ import (
 	"unicode/utf8"
 
 	"github.com/andskur/argon2-hashing"
-	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
-	"github.com/mojocn/base64Captcha"
 	"github.com/penglongli/gin-metrics/ginmetrics"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
 	"github.com/tdewolff/minify/v2/js"
-	"github.com/ulule/limiter/v3"
-	ginlimiter "github.com/ulule/limiter/v3/drivers/middleware/gin"
-	"github.com/ulule/limiter/v3/drivers/store/memory"
 	stripmd "github.com/writeas/go-strip-markdown"
 	"github.com/yuin/goldmark"
 	emoji "github.com/yuin/goldmark-emoji"
@@ -58,13 +53,9 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
-	"golang.org/x/image/draw"
-	"gopkg.in/natefinch/lumberjack.v2"
-	"gopkg.in/yaml.v3"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 const VERSION string = "0.7.0"
@@ -73,10 +64,10 @@ const VERSION string = "0.7.0"
 var (
 	db            *gorm.DB
 	md            goldmark.Markdown
-	configuration *Config
+	configuration *clconfig.Config
 	BuildID       string
-	captcha       *captchas
-	Blogs         map[string]BlogsConfig
+	captcha       *clcaptchas.Captchas
+	Blogs         map[string]clconfig.BlogsConfig
 	BlogsId       map[uint]string
 )
 
@@ -87,11 +78,6 @@ var templatesFS embed.FS
 //go:embed ressources/css
 //go:embed ressources/img
 var staticFS embed.FS
-
-type captchas struct {
-	store  base64Captcha.Store
-	driver base64Captcha.Driver
-}
 
 // Models avec tags GORM
 type Post struct {
@@ -155,85 +141,6 @@ type UpdatePostRequest struct {
 	Hide     bool     `json:"hide"`
 }
 
-type Config struct {
-	TrustedProxies  []string       `yaml:"trustedproxies"`
-	TrustedPlatform string         `yaml:"trustedplatform"`
-	Database        DatabaseConfig `yaml:"database"`
-	StaticPath      string         `yaml:"staticpath"`
-	User            UserConfig     `yaml:"user"`
-	Production      bool           `yaml:"production"`
-	Listen          ListenConfig   `yaml:"listen"`
-	Logger          LoggerConfig   `yaml:"logger"`
-	Blogs           []BlogsConfig  `yaml:"blogs"`
-}
-
-type BlogsConfig struct {
-	Id          uint       `yaml:"id"`
-	Hostname    string     `yaml:"hostname"`
-	SiteName    string     `yaml:"sitename"`
-	Logo        string     `yaml:"logoimg"`
-	Favicon     string     `yaml:"favicon"`
-	Description string     `yaml:"description"`
-	Theme       string     `yaml:"theme"`
-	Menu        []MenuItem `yaml:"menu"`
-
-	ThemeCSS string        `yaml:"-"`
-	LinkRSS  template.HTML `yaml:"-"`
-}
-
-type LoggerConfig struct {
-	Level  string             `yaml:"level"`
-	File   loggerFileConfig   `yaml:"file"`
-	Syslog loggerSyslogConfig `yaml:"syslog"`
-}
-
-type loggerFileConfig struct {
-	Enable     bool   `yaml:"enable"`
-	Path       string `yaml:"path"`
-	MaxSize    int    `yaml:"maxsize"`
-	MaxBackups int    `yaml:"maxbackups"`
-	MaxAge     int    `yaml:"maxage"`
-	Compress   bool   `yaml:"compress"`
-}
-
-type loggerSyslogConfig struct {
-	Enable   bool            `yaml:"enable"`
-	Protocol string          `yaml:"protocol"`
-	Address  string          `yaml:"address"`
-	Tag      string          `yaml:"tag"`
-	Priority syslog.Priority `yaml:"priority"`
-}
-
-// SyslogLevelWriter adapte syslog.Writer pour gérer les niveaux zerolog
-type SyslogLevelWriter struct {
-	writer *syslog.Writer
-}
-
-type ListenConfig struct {
-	Website string `yaml:"website"`
-	Metrics string `yaml:"metrics"`
-}
-
-type UserConfig struct {
-	Login string `yaml:"login"`
-	Pass  string `yaml:"pass"`
-	Hash  string `yaml:"hash"`
-}
-
-type DatabaseConfig struct {
-	Redis string `yaml:"redis"`
-	Db    string `yaml:"db"`
-	Path  string `yaml:"path"`
-	Dsn   string `yaml:"dsn"`
-}
-
-type MenuItem struct {
-	Key   string `yaml:"key"`
-	Value string `yaml:"value"`
-	Link  string `yaml:"link"`
-	Img   string `yaml:"img"`
-}
-
 // RSS représente le flux RSS complet
 type RSS struct {
 	XMLName xml.Name `xml:"rss"`
@@ -269,17 +176,6 @@ type RSSEnclosure struct {
 	URL    string `xml:"url,attr"`
 	Length int64  `xml:"length,attr"`
 	Type   string `xml:"type,attr"`
-}
-
-// Color représente une couleur RGB
-type Color struct {
-	R, G, B int
-}
-
-// Créer un store Redis personnalisé
-type RedisStore struct {
-	client     *redis.Client
-	expiration time.Duration
 }
 
 type externalLinkTransformer struct{}
@@ -389,200 +285,6 @@ func ExtractImages(markdown string, firstOnly bool, fileOnly bool) (bool, []stri
 	return found, l
 }
 
-// InitLogger configure le logger global Zerolog
-// Setup initialise le logger avec la configuration
-func initLogger(cfg LoggerConfig, production bool) {
-	// Définir le niveau de log
-	level := parseLevel(cfg.Level)
-	zerolog.SetGlobalLevel(level)
-
-	// Configurer le format de temps
-	zerolog.TimeFieldFormat = time.RFC3339
-
-	var writers []io.Writer
-
-	// Writer pour la console
-	if !production {
-		consoleWriter := zerolog.ConsoleWriter{
-			Out:        os.Stdout,
-			TimeFormat: "15:04:05",
-			NoColor:    false,
-		}
-		writers = append(writers, consoleWriter)
-	}
-
-	// Writer pour le fichier si activé
-	if cfg.File.Enable {
-		fileWriter, err := setupFileWriter(cfg.File)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to setup file writer")
-		}
-		writers = append(writers, fileWriter)
-	}
-
-	// Wrtier syslog si activé
-	if cfg.Syslog.Enable {
-		syslogWriter, err := setupSyslogWriter(cfg.Syslog)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to setup syslog writer")
-		}
-		writers = append(writers, syslogWriter)
-	}
-
-	if len(writers) == 0 {
-		writers = append(writers, os.Stdout)
-	}
-
-	// Créer un multi-writer
-	multi := io.MultiWriter(writers...)
-
-	// Configurer le logger global
-	log.Logger = zerolog.New(multi).
-		With().
-		Timestamp().
-		Caller().
-		Logger()
-
-	environnment := "developpement"
-	if production {
-		environnment = "production"
-	}
-	log.Info().
-		Str("environment", environnment).
-		Str("level", cfg.Level).
-		Bool("log_to_file", cfg.File.Enable).
-		Bool("log_to_syslog", cfg.Syslog.Enable).
-		Msg("Logger initialized")
-}
-
-// setupFileWriter configure le writer pour les fichiers
-func setupFileWriter(cfg loggerFileConfig) (io.Writer, error) {
-	// Créer le dossier si nécessaire
-	dir := filepath.Dir(cfg.Path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
-	}
-
-	fileWriter := &lumberjack.Logger{
-		Filename:   cfg.Path,
-		MaxSize:    cfg.MaxSize,
-		MaxBackups: cfg.MaxBackups,
-		MaxAge:     cfg.MaxAge,
-		Compress:   cfg.Compress,
-	}
-
-	return fileWriter, nil
-}
-
-// setupSyslogWriter configure le writer pour syslog
-func setupSyslogWriter(cfg loggerSyslogConfig) (io.Writer, error) {
-	// Utiliser un tag par défaut si non spécifié
-	tag := cfg.Tag
-	if tag == "" {
-		tag = "littleblog"
-	}
-	// Utiliser une priorité par défaut si non spécifiée
-	priority := cfg.Priority
-	if priority == 0 {
-		priority = syslog.LOG_INFO | syslog.LOG_LOCAL0
-	}
-
-	var writer *syslog.Writer
-	var err error
-
-	// Connexion locale ou distante
-	if cfg.Protocol == "" || cfg.Address == "" {
-		// Connexion locale (Unix socket)
-		writer, err = syslog.New(priority, tag)
-	} else {
-		// Connexion distante (TCP ou UDP)
-		writer, err = syslog.Dial(cfg.Protocol, cfg.Address, priority, tag)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to syslog: %w", err)
-	}
-
-	// Wrapper pour adapter syslog.Writer à io.Writer avec le bon niveau
-	return &SyslogLevelWriter{writer: writer}, nil
-}
-
-// Write implémente io.Writer et route vers la bonne fonction syslog selon le niveau
-func (w *SyslogLevelWriter) Write(p []byte) (n int, err error) {
-	msg := string(p)
-
-	// Parser le niveau depuis le JSON zerolog
-	level := extractLevelFromJSON(msg)
-
-	// Router vers la bonne méthode syslog selon le niveau
-	switch level {
-	case "debug":
-		return len(p), w.writer.Debug(msg)
-	case "info":
-		return len(p), w.writer.Info(msg)
-	case "warn", "warning":
-		return len(p), w.writer.Warning(msg)
-	case "error":
-		return len(p), w.writer.Err(msg)
-	case "fatal", "panic":
-		return len(p), w.writer.Crit(msg)
-	default:
-		// Par défaut, utiliser Info
-		return len(p), w.writer.Info(msg)
-	}
-}
-
-// extractLevelFromJSON extrait le niveau de log d'un message JSON zerolog
-// Format attendu: {"level":"info",...}
-func extractLevelFromJSON(msg string) string {
-	// Recherche simple du champ "level" dans le JSON
-	// Format: "level":"xxx"
-	startIdx := strings.Index(msg, `"level":"`)
-	if startIdx == -1 {
-		return ""
-	}
-
-	// Décaler après "level":"
-	startIdx += 9
-
-	// Trouver la fin (guillemet suivant)
-	endIdx := strings.Index(msg[startIdx:], `"`)
-	if endIdx == -1 {
-		return ""
-	}
-
-	return msg[startIdx : startIdx+endIdx]
-}
-
-func parseLevel(level string) zerolog.Level {
-	switch level {
-	case "debug":
-		return zerolog.DebugLevel
-	case "info":
-		return zerolog.InfoLevel
-	case "warn":
-		return zerolog.WarnLevel
-	case "error":
-		return zerolog.ErrorLevel
-	default:
-		return zerolog.InfoLevel
-	}
-}
-
-// WithFields retourne un logger avec des champs prédéfinis
-func WithFields(fields map[string]interface{}) zerolog.Logger {
-	ctx := log.With()
-	for k, v := range fields {
-		ctx = ctx.Interface(k, v)
-	}
-	return ctx.Logger()
-}
-
-// WithRequestID retourne un logger avec un request ID
-func WithRequestID(requestID string) zerolog.Logger {
-	return log.With().Str("request_id", requestID).Logger()
-}
-
 // Debug logue un message de debug
 func LogDebug(msg string) {
 	log.Debug().Msg(msg)
@@ -613,201 +315,15 @@ func LogFatal(err error, msg string) {
 	log.Fatal().Err(err).Str("msg", msg)
 }
 
-func NewRedisStore(client *redis.Client) *RedisStore {
-	return &RedisStore{
-		client:     client,
-		expiration: 5 * time.Minute,
-	}
-}
-
-func (r *RedisStore) Set(id string, value string) error {
-	ctx := context.Background()
-	return r.client.Set(ctx, "captcha:"+id, value, r.expiration).Err()
-}
-
-func (r *RedisStore) Get(id string, clear bool) string {
-	ctx := context.Background()
-	key := "captcha:" + id
-	val, _ := r.client.Get(ctx, key).Result()
-	if clear {
-		r.client.Del(ctx, key)
-	}
-	return val
-}
-
-func (r *RedisStore) Verify(id, answer string, clear bool) bool {
-	v := r.Get(id, clear)
-	return v == answer
-}
-
-func newCaptcha(host string) *captchas {
-	var store base64Captcha.Store
-	if host != "" {
-		redisClient := redis.NewClient(&redis.Options{
-			Addr: host,
-		})
-		store = NewRedisStore(redisClient)
-	} else {
-		store = base64Captcha.DefaultMemStore
-	}
-
-	driver := base64Captcha.NewDriverMath(
-		80,  // hauteur
-		240, // largeur
-		6,   // nombre d'opérations à afficher
-		base64Captcha.OptionShowHollowLine,
-		nil, // couleur de fond
-		nil, // police
-		nil, // couleurs
-	)
-
-	return &captchas{
-		store:  store,
-		driver: driver,
-	}
-}
-
-func (cap *captchas) captchaHandler(c *gin.Context) {
-	data, err := cap.generateCaptcha(configuration.Production)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-	c.JSON(http.StatusOK, data)
-}
-
-func (cap *captchas) generateCaptcha(production bool) (map[string]any, error) {
-	captcha := base64Captcha.NewCaptcha(cap.driver, cap.store)
-
-	id, b64s, answer, err := captcha.Generate()
-	if err != nil {
-		return nil, fmt.Errorf("erreur lors de la génération du CAPTCHA")
-	}
-
-	data := gin.H{
-		"captcha_id": id,
-		"image":      b64s,
-		"answer":     "",
-	}
-
-	if !production {
-		fmt.Printf("CAPTCHA généré - ID: %s, Réponse: %s", id, answer)
-		data["answer"] = answer
-	}
-
-	return data, nil
-}
-
-func (cap *captchas) verifyCaptcha(captchaID string, captchaAnswer string) error {
-	captchaID = strings.TrimSpace(captchaID)
-	captchaAnswer = strings.TrimSpace(captchaAnswer)
-
-	if captchaID == "" || captchaAnswer == "" {
-		return fmt.Errorf("CAPTCHA manquant")
-	}
-
-	if !cap.store.Verify(captchaID, captchaAnswer, true) {
-		return fmt.Errorf("CAPTCHA incorrect")
-	}
-	return nil
-}
-
-func createExampleConfig(filename string) (string, error) {
-	example := &Config{
-		Database: DatabaseConfig{
-			Db:   "sqlite",
-			Path: "./test.db",
-		},
-		User: UserConfig{
-			Login: "admin",
-			Pass:  "admin1234",
-		},
-		StaticPath: "./static",
-		Production: false,
-		Logger: LoggerConfig{
-			Level: "info",
-			File: loggerFileConfig{
-				Enable: false,
-			},
-			Syslog: loggerSyslogConfig{
-				Enable: false,
-			},
-		},
-		Listen: ListenConfig{
-			Website: "0.0.0.0:8080",
-			Metrics: "0.0.0.0:8090",
-		},
-		Blogs: []BlogsConfig{
-			{
-				Id:          0,
-				SiteName:    "Mon Blog Tech",
-				Description: "Blog qui utilise littleblog",
-				Logo:        "/static/linux.png",
-				Favicon:     "/files/img/linux.png",
-				Theme:       "blue",
-				Menu: []MenuItem{
-					{Key: "menu1", Value: "Menu 1"},
-					{Key: "menu2", Value: "Menu 2", Img: "/static/linux.png"},
-					{Link: "https://github.com/clankgeek/littleblog", Value: "Sur github"},
-				},
-			},
-		},
-	}
-
-	if filename == "/etc/" {
-		example.Listen.Website = "127.0.0.1:8000"
-		example.Listen.Metrics = ""
-		example.Production = true
-		example.Database.Path = "/var/lib/littleblog/sqlite.db"
-		example.StaticPath = "/var/lib/littleblog/static"
-		example.Logger.File = loggerFileConfig{
-			Enable:     true,
-			Path:       "/var/log/littleblog/littleblog.log",
-			MaxSize:    100,
-			MaxBackups: 30,
-			MaxAge:     7,
-			Compress:   true,
-		}
-		filename = "/etc/littleblog/config.yaml"
-	}
-
-	return filename, writeConfigYaml(filename, example)
-}
-
-func writeConfigYaml(filename string, conf *Config) error {
-	data, err := yaml.Marshal(conf)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(filename, data, 0644)
-}
-
-func handleExampleCreation(filename string) error {
-	if filename == "" {
-		filename = "littleblog.yaml"
-	}
-	filename, err := createExampleConfig(filename)
-	if err != nil {
-		return fmt.Errorf("erreur création exemple: %v", err)
-	}
-
-	fmt.Printf("✅ Fichier exemple créé: %s", filename)
-	fmt.Println("⚠️  Admin_pass sera automatiquement hash en argon2 dans Admin_hash au premier lancement")
-	return nil
-}
-
-func loadAndConvertConfig(configFile string) (*Config, error) {
+func loadAndConvertConfig(configFile string) (*clconfig.Config, error) {
 	// Charger la configuration YAML
-	yamlConfig, err := loadConfig(configFile)
+	yamlConfig, err := clconfig.LoadConfig(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("erreur chargement config: %v", err)
 	}
 
 	// Convertir en config interne
-	conf := convertConfig(yamlConfig)
+	conf := clconfig.ConvertConfig(yamlConfig)
 
 	if conf.Database.Db == "sqlite" && conf.Database.Path == "" {
 		return nil, fmt.Errorf("database.path ne peut pas être vide")
@@ -837,14 +353,14 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 		}
 		conf.User.Hash = string(hash)
 		conf.User.Pass = ""
-		err = writeConfigYaml(configFile, conf)
+		err = clconfig.WriteConfigYaml(configFile, conf)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	BlogsId = make(map[uint]string, len(conf.Blogs))
-	Blogs = make(map[string]BlogsConfig, len(conf.Blogs))
+	Blogs = make(map[string]clconfig.BlogsConfig, len(conf.Blogs))
 	var idfound []uint
 	for _, item := range conf.Blogs {
 		if slices.Contains(idfound, item.Id) {
@@ -866,38 +382,6 @@ func loadAndConvertConfig(configFile string) (*Config, error) {
 	}
 
 	return conf, nil
-}
-
-// Convertir la config YAML en config interne
-func convertConfig(yamlConfig *Config) *Config {
-	conf := &Config{
-		Database:        yamlConfig.Database,
-		User:            yamlConfig.User,
-		StaticPath:      yamlConfig.StaticPath,
-		Production:      yamlConfig.Production,
-		Listen:          yamlConfig.Listen,
-		TrustedProxies:  yamlConfig.TrustedProxies,
-		TrustedPlatform: yamlConfig.TrustedPlatform,
-		Logger:          yamlConfig.Logger,
-		Blogs:           yamlConfig.Blogs,
-	}
-
-	return conf
-}
-
-// Charger la configuration YAML
-func loadConfig(filename string) (*Config, error) {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, fmt.Errorf("impossible de lire le fichier %s: %v", filename, err)
-	}
-
-	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("erreur de parsing YAML: %v", err)
-	}
-
-	return &config, nil
 }
 
 func (t *externalLinkTransformer) Transform(node *ast.Document, reader text.Reader, pc parser.Context) {
@@ -985,30 +469,29 @@ func authRequired() gin.HandlerFunc {
 	}
 }
 
-// Générer une clé secrète aléatoire
-func generateSecretKey() []byte {
-	key := make([]byte, 32)
-	_, err := rand.Read(key)
-	if err != nil {
-		LogFatal(err, "Erreur génération clé secrète")
-	}
-	return key
-}
-
 func initDatabase() {
 	var err error
+
+	// Créer le logger GORM avec Zerolog
+	level := "warn"
+	if configuration.Logger.Level == "debug" || !configuration.Production {
+		level = "trace"
+	}
+	gormLogger := gormzerologger.New(level)
+
 	switch configuration.Database.Db {
 	case "sqlite":
 		db, err = gorm.Open(sqlite.Open(configuration.Database.Path), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Info),
+			Logger: gormLogger,
 		})
 	case "mysql":
 		db, err = gorm.Open(mysql.Open(configuration.Database.Dsn), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Info),
+			Logger: gormLogger,
 		})
 	default:
 		err = fmt.Errorf("le type de database doit etre sqlite ou mysql")
 	}
+
 	if err != nil {
 		LogFatal(err, "Erreur connexion base de données:")
 	}
@@ -1024,13 +507,6 @@ func initDatabase() {
 	LogInfo("Base de données initialisée avec succès")
 }
 
-func getFirstMenuKey(conf *BlogsConfig) string {
-	if len(conf.Menu) > 0 {
-		return slugify(conf.Menu[0].Key)
-	}
-	return ""
-}
-
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, length)
@@ -1040,71 +516,7 @@ func generateRandomString(length int) string {
 	return string(b)
 }
 
-// Fonction pour redimensionner l'image
-func resizeImage(img image.Image, maxWidth int) image.Image {
-	bounds := img.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-
-	// Si l'image est déjà plus petite, la retourner telle quelle
-	if width <= maxWidth {
-		return img
-	}
-
-	// Calculer les nouvelles dimensions en gardant le ratio
-	ratio := float64(maxWidth) / float64(width)
-	newWidth := maxWidth
-	newHeight := int(float64(height) * ratio)
-
-	// Créer une nouvelle image redimensionnée
-	dst := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
-
-	// Utiliser l'interpolation de haute qualité
-	draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
-
-	return dst
-}
-
-// ToHex convertit une couleur en hexadécimal
-func (c Color) ToHex() string {
-	return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
-}
-
-// Darken assombrit une couleur par un pourcentage
-func (c Color) Darken(percent float64) Color {
-	factor := 1.0 - percent/100.0
-	return Color{
-		R: int(float64(c.R) * factor),
-		G: int(float64(c.G) * factor),
-		B: int(float64(c.B) * factor),
-	}
-}
-
-// Lighten éclaircit une couleur par un pourcentage
-func (c Color) Lighten(percent float64) Color {
-	factor := percent / 100.0
-	return Color{
-		R: c.R + int(float64(255-c.R)*factor),
-		G: c.G + int(float64(255-c.G)*factor),
-		B: c.B + int(float64(255-c.B)*factor),
-	}
-}
-
-// HexToColor convertit un hex en Color
-func HexToColor(hex string) Color {
-	hex = strings.TrimPrefix(hex, "#")
-	if len(hex) != 6 {
-		return Color{0, 0, 0}
-	}
-
-	r, _ := strconv.ParseInt(hex[0:2], 16, 64)
-	g, _ := strconv.ParseInt(hex[2:4], 16, 64)
-	b, _ := strconv.ParseInt(hex[4:6], 16, 64)
-
-	return Color{int(r), int(g), int(b)}
-}
-
-func GenerateMenu(items []MenuItem, category string) template.HTML {
+func GenerateMenu(items []clconfig.MenuItem, category string) template.HTML {
 	menuStr := ""
 	for _, item := range items {
 		key := slugify(item.Key)
@@ -1129,7 +541,7 @@ func GenerateMenu(items []MenuItem, category string) template.HTML {
 	return safeHtml(menuStr)
 }
 
-func GenerateDynamicRSS(Menu []MenuItem, SiteName string) (template.HTML, error) {
+func GenerateDynamicRSS(Menu []clconfig.MenuItem, SiteName string) (template.HTML, error) {
 	rssStr := ""
 	for _, item := range Menu {
 		if item.Key == "" {
@@ -1172,7 +584,7 @@ func GenerateThemeCSS(colorName string) string {
 		}
 	}
 
-	baseColor := HexToColor(baseHex)
+	baseColor := climages.HexToColor(baseHex)
 
 	// Générer les variations
 	primaryHover := baseColor.Darken(20)
@@ -1256,153 +668,6 @@ func jsonify(v any) template.JS {
 	return template.JS(b)
 }
 
-func middlerwareLogger() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		path := c.Request.URL.Path
-		raw := c.Request.URL.RawQuery
-
-		// Traiter la requête
-		c.Next()
-
-		// Calculer la latence
-		latency := time.Since(start)
-
-		// Récupérer les informations de la requête
-		statusCode := c.Writer.Status()
-		method := c.Request.Method
-		clientIP := c.ClientIP()
-		userAgent := c.Request.UserAgent()
-
-		// Construire le chemin complet avec query string
-		if raw != "" {
-			path = path + "?" + raw
-		}
-
-		// Créer l'événement de log avec le niveau approprié
-		var logEvent *zerolog.Event
-		switch {
-		case statusCode == 404:
-			logEvent = log.Debug()
-		case statusCode >= 500:
-			logEvent = log.Error()
-		case statusCode >= 400:
-			logEvent = log.Warn()
-		default:
-			logEvent = log.Info()
-		}
-
-		// Ajouter les champs et logger
-		logEvent.
-			Str("method", method).
-			Str("path", path).
-			Int("status", statusCode).
-			Dur("latency", latency).
-			Str("ip", clientIP).
-			Str("user_agent", userAgent).
-			Int("body_size", c.Writer.Size()).
-			Msg("HTTP Request")
-
-		// Logger les erreurs s'il y en a
-		if len(c.Errors) > 0 {
-			for _, err := range c.Errors {
-				log.Error().
-					Err(err.Err).
-					Str("type", strconv.FormatUint(uint64(err.Type), 10)).
-					Msg("Request error")
-			}
-		}
-	}
-}
-
-func middlewareBlogId() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		host := c.Request.Host
-		if strings.Contains(host, ":") {
-			host = strings.Split(host, ":")[0]
-		}
-		if _, ok := Blogs[host]; ok {
-			c.Set("hostname", host)
-		}
-		c.Next()
-	}
-}
-
-func middlewareRecovery() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		defer func() {
-			if err := recover(); err != nil {
-				log.Error().
-					Interface("error", err).
-					Str("path", c.Request.URL.Path).
-					Str("method", c.Request.Method).
-					Msg("Panic recovered")
-
-				c.AbortWithStatus(500)
-			}
-		}()
-		c.Next()
-	}
-}
-
-func middlewareRenderTime() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Stocker le temps de début pour utilisation dans les handlers
-		c.Set("requestStart", time.Now())
-		c.Next()
-	}
-}
-
-func getRenderTime(c *gin.Context) any {
-	start, _ := c.Get("requestStart")
-	duration := time.Since(start.(time.Time))
-	return fmt.Sprintf("Page générée en %s", formatDuration(duration))
-}
-
-func formatDuration(d time.Duration) string {
-	if d < time.Millisecond {
-		return fmt.Sprintf("%dµs", int(d.Nanoseconds())/1000)
-	}
-	if d < time.Second {
-		return fmt.Sprintf("%dms", int(d.Nanoseconds())/1e6)
-	}
-	return fmt.Sprintf("%.2fs", d.Seconds())
-}
-
-func middlewareCORS(c *gin.Context) {
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-	if c.Request.Method == "OPTIONS" {
-		c.AbortWithStatus(204)
-		return
-	}
-
-	c.Next()
-}
-
-func newMiddlewareLimiter() gin.HandlerFunc {
-	rate := limiter.Rate{
-		Period: 1 * time.Minute,
-		Limit:  5,
-	}
-	mstore := memory.NewStore()
-	instance := limiter.New(mstore, rate)
-	return ginlimiter.NewMiddleware(instance)
-}
-
-func newMiddlewareSession() gin.HandlerFunc {
-	store := cookie.NewStore(generateSecretKey())
-	store.Options(sessions.Options{
-		Path:     "/",
-		MaxAge:   86400 * 7,
-		HttpOnly: true,
-		Secure:   configuration.Production,
-	})
-	return sessions.Sessions("littleblog", store)
-}
-
 // Middleware pour minifier les fichiers statiques CSS/JS
 func ServeMinifiedStatic(m *minify.M) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -1461,25 +726,6 @@ func getTemplates() *template.Template {
 	}).ParseFS(templatesFS, "templates/*/*.html"))
 }
 
-func createExample(shouldCreateExample bool, configFile string) {
-	// Handle example creation
-	if shouldCreateExample {
-		if err := handleExampleCreation(configFile); err != nil {
-			fmt.Printf("❌ %v\n", err)
-		}
-		os.Exit(1)
-	}
-
-	_, err := os.Stat(configFile)
-	if err != nil && os.IsNotExist(err) {
-		if err := handleExampleCreation(configFile); err != nil {
-			fmt.Printf("❌ %v\n", err)
-			os.Exit(1)
-		}
-
-	}
-}
-
 func initConfiguration() {
 	configFile, shouldCreateExample, versionDisplay, err := parseCommandLineArgs()
 	if err != nil {
@@ -1495,7 +741,7 @@ func initConfiguration() {
 		os.Exit(0)
 	}
 
-	createExample(shouldCreateExample, configFile)
+	clconfig.CreateExample(shouldCreateExample, configFile)
 
 	// Load and validate configuration
 	conf, err := loadAndConvertConfig(configFile)
@@ -1505,28 +751,7 @@ func initConfiguration() {
 	}
 
 	configuration = conf
-	captcha = newCaptcha(configuration.Database.Redis)
-}
-
-func setMiddleware(r *gin.Engine) {
-	// logger
-	r.Use(middlerwareLogger())
-	r.Use(middlewareRecovery())
-
-	// get blog Id
-	r.Use(middlewareBlogId())
-
-	// use Compression, with gzip
-	r.Use(gzip.Gzip(gzip.BestSpeed))
-
-	// Configuration des sessions
-	r.Use(newMiddlewareSession())
-
-	// Calculate time elapsed
-	r.Use(middlewareRenderTime())
-
-	// CORS
-	r.Use(middlewareCORS)
+	captcha = clcaptchas.New(configuration.Database.Redis)
 }
 
 func newServer() *gin.Engine {
@@ -1579,7 +804,7 @@ func setRoutes(r *gin.Engine) {
 	m.AddFunc("application/javascript", js.Minify)
 
 	// middleware rate limiter
-	middlewareLimiter := newMiddlewareLimiter()
+	middlewareLimiter := clmiddleware.NewLimiter()
 
 	// metrics routes (port 8090)
 	metrics := ginmetrics.GetMonitor()
@@ -1598,7 +823,9 @@ func setRoutes(r *gin.Engine) {
 	r.GET("/", indexHandler)
 	r.GET("/:category", indexHandler)
 	r.GET("/post/:id", postHandler)
-	r.GET("/files/captcha", captcha.captchaHandler)
+	r.GET("/files/captcha", func(c *gin.Context) {
+		captcha.CaptchaHandler(c, configuration.Production)
+	})
 
 	// Routes d'authentification
 	r.GET("/admin/login", loginPageHandler)
@@ -1670,7 +897,7 @@ func parseCommandLineArgs() (configFile string, shouldCreateExample bool, versio
 	return *config, false, false, nil
 }
 
-func displayConfiguration(config *Config) {
+func displayConfiguration(config *clconfig.Config) {
 	LogPrintf("Littleblog version %s", VERSION)
 
 	LogPrintf("Mode Production %v", config.Production)
@@ -1723,7 +950,7 @@ func main() {
 	}
 
 	initConfiguration()
-	initLogger(configuration.Logger, configuration.Production)
+	cllog.InitLogger(configuration.Logger, configuration.Production)
 	displayConfiguration(configuration)
 
 	initMarkdown()
@@ -1731,7 +958,7 @@ func main() {
 
 	r := newServer()
 
-	setMiddleware(r)
+	clmiddleware.InitMiddleware(r, Blogs, configuration.Production)
 	setRoutes(r)
 
 	startServer(r)
@@ -1739,7 +966,7 @@ func main() {
 
 // ============= HANDLERS PUBLICS =============
 
-func getConfItem(c *gin.Context, withId bool, id uint) BlogsConfig {
+func getConfItem(c *gin.Context, withId bool, id uint) clconfig.BlogsConfig {
 	if withId {
 		if item, ok := BlogsId[id]; ok {
 			return Blogs[item]
@@ -1753,7 +980,7 @@ func getConfItem(c *gin.Context, withId bool, id uint) BlogsConfig {
 	if item, ok := BlogsId[0]; ok {
 		return Blogs[item]
 	}
-	return BlogsConfig{}
+	return clconfig.BlogsConfig{}
 }
 
 func themeHandler(c *gin.Context) {
@@ -1800,7 +1027,7 @@ func indexHandler(c *gin.Context) {
 		"rsslink":         item.LinkRSS,
 		"BuildID":         BuildID,
 		"memories":        memories,
-		"renderTime":      getRenderTime(c),
+		"renderTime":      clmiddleware.GetRenderTime(c),
 	})
 }
 
@@ -1817,7 +1044,7 @@ func pageNotFound(c *gin.Context, title string) {
 		"version":     VERSION,
 		"BuildID":     BuildID,
 		"menu":        GenerateMenu(item.Menu, ""),
-		"renderTime":  getRenderTime(c),
+		"renderTime":  clmiddleware.GetRenderTime(c),
 	})
 }
 
@@ -1856,7 +1083,7 @@ func postHandler(c *gin.Context) {
 		"version":         VERSION,
 		"menu":            GenerateMenu(item.Menu, post.Category),
 		"BuildID":         BuildID,
-		"renderTime":      getRenderTime(c),
+		"renderTime":      clmiddleware.GetRenderTime(c),
 	})
 }
 
@@ -1958,7 +1185,7 @@ func adminDashboardHandler(c *gin.Context) {
 		"version":     VERSION,
 		"BuildID":     BuildID,
 		"memories":    getMemUsage(),
-		"renderTime":  getRenderTime(c),
+		"renderTime":  clmiddleware.GetRenderTime(c),
 	})
 }
 
@@ -2007,7 +1234,7 @@ func uploadImageHandler(c *gin.Context) {
 	}
 
 	// Redimensionner si nécessaire
-	processedImg := resizeImage(img, 1600)
+	processedImg := climages.Resize(img, 1600)
 
 	item := getConfItem(c, false, 0)
 
@@ -2103,11 +1330,11 @@ func adminPostsHandler(c *gin.Context) {
 		"version":     VERSION,
 		"BuildID":     BuildID,
 		"memories":    getMemUsage(),
-		"renderTime":  getRenderTime(c),
+		"renderTime":  clmiddleware.GetRenderTime(c),
 	})
 }
 
-func getOptionsCategory(item BlogsConfig) template.HTML {
+func getOptionsCategory(item clconfig.BlogsConfig) template.HTML {
 	var optionsCategory string
 	for _, item := range item.Menu {
 		slugifiedKey := slugify(item.Key)
@@ -2139,7 +1366,7 @@ func newPostPageHandler(c *gin.Context) {
 		"optionsCategory": getOptionsCategory(item),
 		"BuildID":         BuildID,
 		"memories":        getMemUsage(),
-		"renderTime":      getRenderTime(c),
+		"renderTime":      clmiddleware.GetRenderTime(c),
 	})
 }
 
@@ -2179,7 +1406,7 @@ func editPostPageHandler(c *gin.Context) {
 		"optionsCategory": getOptionsCategory(item),
 		"BuildID":         BuildID,
 		"memories":        getMemUsage(),
-		"renderTime":      getRenderTime(c),
+		"renderTime":      clmiddleware.GetRenderTime(c),
 	})
 }
 
@@ -2616,7 +1843,7 @@ func addCommentAPI(c *gin.Context) {
 	}
 
 	// controle du captcha
-	err := captcha.verifyCaptcha(req.CaptchaID, req.CaptchaAnswer)
+	err := captcha.VerifyCaptcha(req.CaptchaID, req.CaptchaAnswer)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

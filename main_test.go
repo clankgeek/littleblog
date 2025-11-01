@@ -6,6 +6,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"html/template"
+	"littleblog/internal/clcaptchas"
+	"littleblog/internal/clconfig"
+	"littleblog/internal/cllog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -68,19 +71,19 @@ func setupTestRouter() *gin.Engine {
 	return r
 }
 
-func setupTestConfig() *Config {
-	c := &Config{
-		Database: DatabaseConfig{
+func setupTestConfig() *clconfig.Config {
+	c := &clconfig.Config{
+		Database: clconfig.DatabaseConfig{
 			Db:   "sqlite",
 			Path: ":memory:",
 		},
-		User: UserConfig{
+		User: clconfig.UserConfig{
 			Login: "admin",
 			Hash:  "$argon2id$v=19$m=65536,t=3,p=2$abcdefghijklmnop$0123456789abcdef0123456789abcdef",
 		},
 		Production: false,
-		Logger:     LoggerConfig{},
-		Blogs: []BlogsConfig{
+		Logger:     clconfig.LoggerConfig{},
+		Blogs: []clconfig.BlogsConfig{
 			{
 				SiteName:    "Test Blog",
 				Description: "Test Description",
@@ -88,13 +91,13 @@ func setupTestConfig() *Config {
 		},
 	}
 	BlogsId = make(map[uint]string, len(c.Blogs))
-	Blogs = make(map[string]BlogsConfig, len(c.Blogs))
+	Blogs = make(map[string]clconfig.BlogsConfig, len(c.Blogs))
 	for _, item := range c.Blogs {
 		item.ThemeCSS = GenerateThemeCSS(item.Theme)
 		Blogs[item.Hostname] = item
 		BlogsId[item.Id] = item.Hostname
 	}
-	initLogger(c.Logger, false)
+	cllog.InitLogger(c.Logger, false)
 
 	return c
 }
@@ -139,7 +142,7 @@ func TestExtractImages(t *testing.T) {
 }
 
 func TestGenerateMenu(t *testing.T) {
-	menu := []MenuItem{
+	menu := []clconfig.MenuItem{
 		{
 			Key:   "aaa",
 			Value: "AAA",
@@ -148,7 +151,7 @@ func TestGenerateMenu(t *testing.T) {
 	}
 	assert.Equal(t, template.HTML("<a href=\"/aaa\" class=\"nav-link\"><img src=\"/static/test.png\" class=\"icon\"> AAA</a>&nbsp;"), GenerateMenu(menu, ""))
 	assert.Equal(t, template.HTML("<a href=\"/aaa\" class=\"nav-link active\"><img src=\"/static/test.png\" class=\"icon\"> AAA</a>&nbsp;"), GenerateMenu(menu, "aaa"))
-	menu = []MenuItem{
+	menu = []clconfig.MenuItem{
 		{
 			Key:   "aaa",
 			Value: "AAA",
@@ -198,7 +201,7 @@ func TestCreateExampleConfig(t *testing.T) {
 	tempFile := "test_config.yaml"
 	defer os.Remove(tempFile)
 
-	_, err := createExampleConfig(tempFile)
+	_, err := clconfig.CreateExampleConfig(tempFile)
 	assert.NoError(t, err)
 
 	// Vérifier que le fichier existe
@@ -209,7 +212,7 @@ func TestCreateExampleConfig(t *testing.T) {
 	data, err := os.ReadFile(tempFile)
 	assert.NoError(t, err)
 
-	var config Config
+	var config clconfig.Config
 	err = yaml.Unmarshal(data, &config)
 	assert.NoError(t, err)
 	assert.Equal(t, "Mon Blog Tech", config.Blogs[0].SiteName)
@@ -219,15 +222,15 @@ func TestCreateExampleConfig(t *testing.T) {
 func TestLoadConfig(t *testing.T) {
 	// Créer un fichier de config temporaire
 	tempFile := "test_load_config.yaml"
-	config := &Config{
-		Database: DatabaseConfig{
+	config := &clconfig.Config{
+		Database: clconfig.DatabaseConfig{
 			Db:   "sqlite",
 			Path: "test.db",
 		},
-		User: UserConfig{
+		User: clconfig.UserConfig{
 			Login: "testadmin",
 		},
-		Blogs: []BlogsConfig{
+		Blogs: []clconfig.BlogsConfig{
 			{
 				SiteName:    "Test Site",
 				Description: "Test Desc",
@@ -242,13 +245,13 @@ func TestLoadConfig(t *testing.T) {
 	defer os.Remove(tempFile)
 
 	// Tester le chargement
-	loaded, err := loadConfig(tempFile)
+	loaded, err := clconfig.LoadConfig(tempFile)
 	assert.NoError(t, err)
 	assert.Equal(t, config.Blogs[0].SiteName, loaded.Blogs[0].SiteName)
 	assert.Equal(t, config.User.Login, loaded.User.Login)
 
 	// Tester avec un fichier inexistant
-	_, err = loadConfig("nonexistent.yaml")
+	_, err = clconfig.LoadConfig("nonexistent.yaml")
 	assert.Error(t, err)
 }
 
@@ -315,8 +318,8 @@ func TestAddCommentAPI(t *testing.T) {
 
 	r.POST("/api/posts/:id/comments", addCommentAPI)
 
-	captcha = newCaptcha("")
-	data, err := captcha.generateCaptcha(false)
+	captcha = clcaptchas.New("")
+	data, err := captcha.GenerateCaptcha(false)
 	assert.Equal(t, nil, err)
 
 	comment := CreateCommentRequest{
@@ -660,15 +663,6 @@ func TestGenerateRandomString(t *testing.T) {
 	assert.NotEqual(t, str1, str2)
 }
 
-func TestGenerateSecretKey(t *testing.T) {
-	key := generateSecretKey()
-	assert.Len(t, key, 32)
-
-	// Vérifier que deux appels génèrent des clés différentes
-	key2 := generateSecretKey()
-	assert.NotEqual(t, key, key2)
-}
-
 // ============= Tests pour les routes de commentaires =============
 
 func TestGetCommentsAPI(t *testing.T) {
@@ -746,8 +740,8 @@ func TestPostWorkflow(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	captcha = newCaptcha("")
-	data, err := captcha.generateCaptcha(false)
+	captcha = clcaptchas.New("")
+	data, err := captcha.GenerateCaptcha(false)
 	assert.Equal(t, nil, err)
 
 	// 3. Ajouter un commentaire
@@ -950,8 +944,8 @@ func TestInputValidation(t *testing.T) {
 
 		r.POST("/api/posts/:id/comments", addCommentAPI)
 
-		captcha = newCaptcha("")
-		data, err := captcha.generateCaptcha(false)
+		captcha = clcaptchas.New("")
+		data, err := captcha.GenerateCaptcha(false)
 		assert.Equal(t, nil, err)
 
 		comment := CreateCommentRequest{
