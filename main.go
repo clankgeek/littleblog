@@ -38,8 +38,6 @@ import (
 	"github.com/andskur/argon2-hashing"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	"github.com/penglongli/gin-metrics/ginmetrics"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
@@ -806,10 +804,6 @@ func setRoutes(r *gin.Engine) {
 	// middleware rate limiter
 	middlewareLimiter := clmiddleware.NewLimiter()
 
-	// metrics routes (port 8090)
-	metrics := ginmetrics.GetMonitor()
-	metrics.Use(r)
-
 	// Route statiques
 	r.Static("/static/", configuration.StaticPath)
 	r.GET("/files/css/*.css", ServeMinifiedStatic(m))
@@ -863,14 +857,6 @@ func setRoutes(r *gin.Engine) {
 }
 
 func startServer(r *gin.Engine) {
-	if configuration.Listen.Metrics != "" {
-		LogPrintf("Metrics disponible sur http://%s/metrics", configuration.Listen.Metrics)
-		go func() {
-			http.Handle("/metrics", promhttp.Handler())
-			http.ListenAndServe(configuration.Listen.Metrics, nil)
-		}()
-	}
-
 	LogPrintf("Website démarré sur http://%s", configuration.Listen.Website)
 	LogPrintf("Admin: http://%s/admin/login", configuration.Listen.Website)
 	r.Run(configuration.Listen.Website)

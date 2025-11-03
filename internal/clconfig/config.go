@@ -60,7 +60,6 @@ type LoggerSyslogConfig struct {
 
 type ListenConfig struct {
 	Website string `yaml:"website"`
-	Metrics string `yaml:"metrics"`
 }
 
 type UserConfig struct {
@@ -106,7 +105,6 @@ func CreateExampleConfig(filename string) (string, error) {
 		},
 		Listen: ListenConfig{
 			Website: "0.0.0.0:8080",
-			Metrics: "0.0.0.0:8090",
 		},
 		Blogs: []BlogsConfig{
 			{
@@ -127,7 +125,6 @@ func CreateExampleConfig(filename string) (string, error) {
 
 	if filename == "/etc/" {
 		example.Listen.Website = "127.0.0.1:8000"
-		example.Listen.Metrics = ""
 		example.Production = true
 		example.Database.Path = "/var/lib/littleblog/sqlite.db"
 		example.StaticPath = "/var/lib/littleblog/static"

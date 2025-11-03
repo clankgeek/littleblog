@@ -26,7 +26,6 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
   - Templates inclus dans le binaire
   - Configuration en Yaml (autogénéré par le binaire)
   - API RESTful (json)
-  - /metrics pour Promotheus avec port dédié
   - Logs zerolog et gestion des rotations lumberjack
   - Emission vers Syslog
   - Compression gzip
@@ -98,7 +97,6 @@ logger:
     priority: 6 # LOG_INFO
 listen:
   website: 0.0.0.0:8080
-  metrics: 0.0.0.0:8090 #enlever pour désactiver, promotheus format
 blogs:
   - id: 0 # entier unique par blog, obligatoire pour la base de données
     hostname: blog.monsite.com # pour le routage en cas de multiple blog
@@ -117,14 +115,4 @@ blogs:
       value: "GitHub"
 
 ```
-
-### Exemple docker compose Littleblog + Promotheus + Grafana
-
-```bash
-  docker compose up
-```
-
-Dans grafana http://127.0.0.1:3000 ajouter le Data Sources Promotheus, avec la connection à http://prometheus:9090
-
-Puis dans dashboard importer grafana.json.
 
