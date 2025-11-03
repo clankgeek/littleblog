@@ -71,7 +71,9 @@ trustedproxies:
   - 192.168.1.2 # ip du reverse proxy authorisé en entrée
 trustedplatform: #cloudflare, google, flyio, ou header name exemple X-CDN-Client-IP
 database:
-  redis: #localhost:6379, pour le CAPTCHA, si vide, utilisation store interne à go.
+  redis:
+    addr: #localhost:6379, pour le CAPTCHA, si vide, utilisation store interne à go.
+    db: 0 # le numéro du stockage redis
   db: sqlite3
   path: ./blog.db
   #db: mysql

@@ -749,7 +749,7 @@ func initConfiguration() {
 	}
 
 	configuration = conf
-	captcha = clcaptchas.New(configuration.Database.Redis)
+	captcha = clcaptchas.New(configuration.Database.Redis.Addr, configuration.Database.Redis.Db)
 }
 
 func newServer() *gin.Engine {
@@ -898,7 +898,7 @@ func displayConfiguration(config *clconfig.Config) {
 		LogPrintf("  • Type mysql")
 		LogPrintf("  • DSN %s", config.Database.Dsn)
 	}
-	if config.Database.Redis != "" {
+	if config.Database.Redis.Addr != "" {
 		LogPrintf("  • Cache redis %s", config.Database.Redis)
 	}
 

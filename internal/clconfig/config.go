@@ -69,10 +69,15 @@ type UserConfig struct {
 }
 
 type DatabaseConfig struct {
-	Redis string `yaml:"redis"`
-	Db    string `yaml:"db"`
-	Path  string `yaml:"path"`
-	Dsn   string `yaml:"dsn"`
+	Redis RedisConfig `yaml:"redis"`
+	Db    string      `yaml:"db"`
+	Path  string      `yaml:"path"`
+	Dsn   string      `yaml:"dsn"`
+}
+
+type RedisConfig struct {
+	Addr string `yaml:"addr"`
+	Db   int    `yaml:"db"`
 }
 
 type MenuItem struct {

@@ -16,11 +16,12 @@ type Captchas struct {
 	driver base64Captcha.Driver
 }
 
-func New(host string) *Captchas {
+func New(host string, db int) *Captchas {
 	var store base64Captcha.Store
 	if host != "" {
 		redisClient := redis.NewClient(&redis.Options{
 			Addr: host,
+			DB:   db,
 		})
 		store = clredis.New(redisClient)
 	} else {

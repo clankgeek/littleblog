@@ -318,7 +318,7 @@ func TestAddCommentAPI(t *testing.T) {
 
 	r.POST("/api/posts/:id/comments", addCommentAPI)
 
-	captcha = clcaptchas.New("")
+	captcha = clcaptchas.New("", 0)
 	data, err := captcha.GenerateCaptcha(false)
 	assert.Equal(t, nil, err)
 
@@ -740,7 +740,7 @@ func TestPostWorkflow(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	captcha = clcaptchas.New("")
+	captcha = clcaptchas.New("", 0)
 	data, err := captcha.GenerateCaptcha(false)
 	assert.Equal(t, nil, err)
 
@@ -944,7 +944,7 @@ func TestInputValidation(t *testing.T) {
 
 		r.POST("/api/posts/:id/comments", addCommentAPI)
 
-		captcha = clcaptchas.New("")
+		captcha = clcaptchas.New("", 0)
 		data, err := captcha.GenerateCaptcha(false)
 		assert.Equal(t, nil, err)
 
