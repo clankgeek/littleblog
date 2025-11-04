@@ -6,9 +6,14 @@ import (
 	"encoding/xml"
 	"fmt"
 	"html/template"
-	"littleblog/internal/clcaptchas"
-	"littleblog/internal/clconfig"
-	"littleblog/internal/cllog"
+	handlers_rss "littleblog/internal/handlers/rss"
+	"littleblog/internal/models/clblog"
+	"littleblog/internal/models/clcaptchas"
+	"littleblog/internal/models/clconfig"
+	"littleblog/internal/models/cllog"
+	"littleblog/internal/models/clmarkdown"
+	"littleblog/internal/models/clposts"
+	"littleblog/internal/models/clrss"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,7 +47,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	})
 	require.NoError(t, err)
 
-	err = testDB.AutoMigrate(&Post{}, &Comment{})
+	err = testDB.AutoMigrate(&clposts.Post{}, &clposts.Comment{})
 	require.NoError(t, err)
 
 	return testDB
@@ -54,7 +59,7 @@ func setupTestDBBench(t *testing.B) *gorm.DB {
 	})
 	require.NoError(t, err)
 
-	err = testDB.AutoMigrate(&Post{}, &Comment{})
+	err = testDB.AutoMigrate(&clposts.Post{}, &clposts.Comment{})
 	require.NoError(t, err)
 
 	return testDB
@@ -90,20 +95,21 @@ func setupTestConfig() *clconfig.Config {
 			},
 		},
 	}
-	BlogsId = make(map[uint]string, len(c.Blogs))
-	Blogs = make(map[string]clconfig.BlogsConfig, len(c.Blogs))
+	lb := clblog.GetInstance()
+	lb.BlogsId = make(map[uint]string, len(c.Blogs))
+	lb.Blogs = make(map[string]clconfig.BlogsConfig, len(c.Blogs))
 	for _, item := range c.Blogs {
-		item.ThemeCSS = GenerateThemeCSS(item.Theme)
-		Blogs[item.Hostname] = item
-		BlogsId[item.Id] = item.Hostname
+		item.ThemeCSS = clblog.GenerateThemeCSS(item.Theme)
+		lb.Blogs[item.Hostname] = item
+		lb.BlogsId[item.Id] = item.Hostname
 	}
 	cllog.InitLogger(c.Logger, false)
 
 	return c
 }
 
-func createTestPost(db *gorm.DB) *Post {
-	post := &Post{
+func createTestPost(db *gorm.DB) *clposts.Post {
+	post := &clposts.Post{
 		BlogID:   0,
 		Title:    "Test Post",
 		Content:  "Test Content",
@@ -126,18 +132,18 @@ func TestDateTimestamp(t *testing.T) {
 
 func TestExtractImages(t *testing.T) {
 	s := "yoyo ![monimage.jpg](/static/uploads/1759683627_d4hhlyrc.jpg) oyoyo ![monimage2.jpg](/static/uploads/1759683627_d4hhlxxx.jpg) x"
-	found, images := ExtractImages(s, true, false)
+	found, images := clposts.ExtractImages(s, true, false)
 	assert.True(t, found)
 	assert.True(t, len(images) == 1)
 	assert.Equal(t, "![monimage.jpg](/static/uploads/1759683627_d4hhlyrc.jpg)", images[0])
 
-	found, images = ExtractImages(s, false, true)
+	found, images = clposts.ExtractImages(s, false, true)
 	assert.True(t, found)
 	assert.Equal(t, 2, len(images))
 	assert.Equal(t, "/static/uploads/1759683627_d4hhlyrc.jpg", images[0])
 	assert.Equal(t, "/static/uploads/1759683627_d4hhlxxx.jpg", images[1])
 
-	found, _ = ExtractImages("xxx", true, false)
+	found, _ = clposts.ExtractImages("xxx", true, false)
 	assert.False(t, found)
 }
 
@@ -164,7 +170,7 @@ func TestGenerateMenu(t *testing.T) {
 func TestPost_BeforeSave(t *testing.T) {
 	testDB := setupTestDB(t)
 
-	post := &Post{
+	post := &clposts.Post{
 		BlogID:   0,
 		Title:    "Test Post",
 		Content:  "Test Content",
@@ -177,10 +183,10 @@ func TestPost_BeforeSave(t *testing.T) {
 }
 
 func TestPost_AfterFind(t *testing.T) {
+	clmarkdown.InitMarkdown()
 	testDB := setupTestDB(t)
-	initMarkdown()
 
-	post := &Post{
+	post := &clposts.Post{
 		BlogID:  0,
 		Title:   "Test Post",
 		Content: "**Bold Text**",
@@ -188,7 +194,7 @@ func TestPost_AfterFind(t *testing.T) {
 	}
 	testDB.Create(post)
 
-	var foundPost Post
+	var foundPost clposts.Post
 	testDB.First(&foundPost, post.ID)
 
 	assert.Equal(t, []string{"tag1", "tag2", "tag3"}, foundPost.TagsList)
@@ -259,12 +265,12 @@ func TestLoadConfig(t *testing.T) {
 
 func TestGetPostsAPI(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
 
 	// Créer des posts de test
-	testDB.Create(&Post{BlogID: 0, Title: "Post 1", Content: "Content 1"})
-	testDB.Create(&Post{BlogID: 0, Title: "Post 2", Content: "Content 2"})
+	testDB.Create(&clposts.Post{BlogID: 0, Title: "Post 1", Content: "Content 1"})
+	testDB.Create(&clposts.Post{BlogID: 0, Title: "Post 2", Content: "Content 2"})
 
 	r.GET("/api/posts", getPostsAPI)
 
@@ -282,7 +288,7 @@ func TestGetPostsAPI(t *testing.T) {
 
 func TestGetPostAPI(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
 
 	post := createTestPost(testDB)
@@ -311,15 +317,15 @@ func TestGetPostAPI(t *testing.T) {
 
 func TestAddCommentAPI(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
 
 	post := createTestPost(testDB)
 
 	r.POST("/api/posts/:id/comments", addCommentAPI)
 
-	captcha = clcaptchas.New("", 0)
-	data, err := captcha.GenerateCaptcha(false)
+	clblog.GetInstance().Captcha = clcaptchas.New("", 0)
+	data, err := clblog.GetInstance().Captcha.GenerateCaptcha(false)
 	assert.Equal(t, nil, err)
 
 	comment := CreateCommentRequest{
@@ -337,7 +343,7 @@ func TestAddCommentAPI(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, w.Code)
 
-	var createdComment Comment
+	var createdComment clposts.Comment
 	err = json.Unmarshal(w.Body.Bytes(), &createdComment)
 	assert.NoError(t, err)
 	assert.Equal(t, comment.Author, createdComment.Author)
@@ -347,25 +353,25 @@ func TestAddCommentAPI(t *testing.T) {
 
 func TestSearchPostsAPI(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
 
 	// Créer des posts avec différents contenus
-	testDB.Create(&Post{
+	testDB.Create(&clposts.Post{
 		BlogID:  0,
 		Title:   "Go Programming",
 		Content: "Learn Go programming language",
 		Excerpt: "Introduction to Go",
 		Tags:    "golang,programming",
 	})
-	testDB.Create(&Post{
+	testDB.Create(&clposts.Post{
 		BlogID:  0,
 		Title:   "Python Tutorial",
 		Content: "Learn Python basics",
 		Excerpt: "Python for beginners",
 		Tags:    "python,tutorial",
 	})
-	testDB.Create(&Post{
+	testDB.Create(&clposts.Post{
 		BlogID:  0,
 		Title:   "JavaScript Guide",
 		Content: "Modern JavaScript features",
@@ -395,7 +401,7 @@ func TestSearchPostsAPI(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, w.Code)
 
-			var posts []Post
+			var posts []clposts.Post
 			json.Unmarshal(w.Body.Bytes(), &posts)
 			assert.Len(t, posts, tt.wantResults)
 		})
@@ -406,13 +412,13 @@ func TestSearchPostsAPI(t *testing.T) {
 
 func TestLoginHandler(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
-	configuration = setupTestConfig()
+	clblog.GetInstance().Configuration = setupTestConfig()
 
 	// Créer un hash valide pour le test
 	hash, _ := HashPassword("testpassword")
-	configuration.User.Hash = hash
+	clblog.GetInstance().Configuration.User.Hash = hash
 
 	r.POST("/admin/login", loginHandler)
 
@@ -492,7 +498,7 @@ func TestAuthRequiredMiddleware(t *testing.T) {
 
 func TestCreatePostHandler(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
 
 	// Simuler une session admin
@@ -527,7 +533,7 @@ func TestCreatePostHandler(t *testing.T) {
 	assert.Contains(t, response, "message")
 
 	// Vérifier que le post a été créé
-	var post Post
+	var post clposts.Post
 	testDB.First(&post, response["post_id"])
 	assert.Equal(t, createReq.Title, post.Title)
 	assert.Equal(t, createReq.Content, post.Content)
@@ -535,7 +541,7 @@ func TestCreatePostHandler(t *testing.T) {
 
 func TestUpdatePostHandler(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
 
 	post := createTestPost(testDB)
@@ -558,7 +564,7 @@ func TestUpdatePostHandler(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Vérifier la mise à jour
-	var updatedPost Post
+	var updatedPost clposts.Post
 	testDB.First(&updatedPost, post.ID)
 	assert.Equal(t, updateReq.Title, updatedPost.Title)
 	assert.Equal(t, updateReq.Content, updatedPost.Content)
@@ -567,13 +573,13 @@ func TestUpdatePostHandler(t *testing.T) {
 
 func TestDeletePostHandler(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
 
 	post := createTestPost(testDB)
 
 	// Ajouter des commentaires
-	testDB.Create(&Comment{PostID: post.ID, Author: "User", Content: "Comment"})
+	testDB.Create(&clposts.Comment{PostID: post.ID, Author: "User", Content: "Comment"})
 
 	r.DELETE("/admin/posts/:id", deletePostHandler)
 
@@ -585,17 +591,16 @@ func TestDeletePostHandler(t *testing.T) {
 
 	// Vérifier que le post et ses dépendances ont été supprimés
 	var count int64
-	testDB.Model(&Post{}).Where("id = ?", post.ID).Count(&count)
+	testDB.Model(&clposts.Post{}).Where("id = ?", post.ID).Count(&count)
 	assert.Equal(t, int64(0), count)
 
-	testDB.Model(&Comment{}).Where("post_id = ?", post.ID).Count(&count)
+	testDB.Model(&clposts.Comment{}).Where("post_id = ?", post.ID).Count(&count)
 	assert.Equal(t, int64(0), count)
 }
 
 // ============= Tests pour les fonctions utilitaires =============
 
 func TestConvertMarkdownToHTML(t *testing.T) {
-	initMarkdown()
 
 	tests := []struct {
 		name     string
@@ -628,10 +633,10 @@ func TestConvertMarkdownToHTML(t *testing.T) {
 			`<a href="http://example.com" target="_blank" rel="noopener noreferrer">Link</a>`,
 		},
 	}
-
+	clmarkdown.InitMarkdown()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			html := convertMarkdownToHTML(tt.markdown)
+			html := clmarkdown.ConvertMarkdownToHTML(tt.markdown)
 			assert.Contains(t, string(html), tt.expected)
 		})
 	}
@@ -667,14 +672,14 @@ func TestGenerateRandomString(t *testing.T) {
 
 func TestGetCommentsAPI(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
 
 	post := createTestPost(testDB)
 
 	// Créer des commentaires
-	testDB.Create(&Comment{PostID: post.ID, Author: "User1", Content: "Comment 1"})
-	testDB.Create(&Comment{PostID: post.ID, Author: "User2", Content: "Comment 2"})
+	testDB.Create(&clposts.Comment{PostID: post.ID, Author: "User1", Content: "Comment 1"})
+	testDB.Create(&clposts.Comment{PostID: post.ID, Author: "User2", Content: "Comment 2"})
 
 	r.GET("/api/posts/:id/comments", getCommentsAPI)
 
@@ -684,7 +689,7 @@ func TestGetCommentsAPI(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var comments []Comment
+	var comments []clposts.Comment
 	json.Unmarshal(w.Body.Bytes(), &comments)
 	assert.Len(t, comments, 2)
 	assert.Equal(t, "User1", comments[0].Author)
@@ -695,9 +700,9 @@ func TestGetCommentsAPI(t *testing.T) {
 
 func TestPostWorkflow(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
-	configuration = setupTestConfig()
+	clblog.GetInstance().Configuration = setupTestConfig()
 
 	// Setup routes
 	r.POST("/admin/posts", createPostHandler)
@@ -740,8 +745,8 @@ func TestPostWorkflow(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	captcha = clcaptchas.New("", 0)
-	data, err := captcha.GenerateCaptcha(false)
+	clblog.GetInstance().Captcha = clcaptchas.New("", 0)
+	data, err := clblog.GetInstance().Captcha.GenerateCaptcha(false)
 	assert.Equal(t, nil, err)
 
 	// 3. Ajouter un commentaire
@@ -761,7 +766,7 @@ func TestPostWorkflow(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, w.Code)
 
 	// 5. Vérifier l'état final
-	var post Post
+	var post clposts.Post
 	testDB.Preload("Comments").First(&post, postID)
 	assert.Equal(t, "Updated Integration Test", post.Title)
 	assert.Len(t, post.Comments, 1)
@@ -775,12 +780,12 @@ func TestPostWorkflow(t *testing.T) {
 
 	// Vérifier la suppression
 	var count int64
-	testDB.Model(&Post{}).Where("id = ?", postID).Count(&count)
+	testDB.Model(&clposts.Post{}).Where("id = ?", postID).Count(&count)
 	assert.Equal(t, int64(0), count)
 }
 
 func BenchmarkConvertMarkdownToHTML(b *testing.B) {
-	initMarkdown()
+
 	markdown := `# Benchmark Test
 
 This is a **benchmark** test with *various* markdown elements.
@@ -798,19 +803,19 @@ func main() {
 ` + "```" + `
 `
 	b.ResetTimer()
-
+	clmarkdown.InitMarkdown()
 	for i := 0; i < b.N; i++ {
-		convertMarkdownToHTML(markdown)
+		clmarkdown.ConvertMarkdownToHTML(markdown)
 	}
 }
 
 func BenchmarkSearchPosts(b *testing.B) {
 	testDB := setupTestDBBench(b)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 
 	// Créer de nombreux posts pour le benchmark
 	for i := 0; i < 100; i++ {
-		testDB.Create(&Post{
+		testDB.Create(&clposts.Post{
 			BlogID:  0,
 			Title:   fmt.Sprintf("Post %d", i),
 			Content: fmt.Sprintf("Content for post %d with various keywords", i),
@@ -821,9 +826,9 @@ func BenchmarkSearchPosts(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		var posts []Post
+		var posts []clposts.Post
 		searchTerm := "%keyword%"
-		db.Where(
+		clblog.GetInstance().Db.Where(
 			"LOWER(title) LIKE ? OR LOWER(content) LIKE ? OR LOWER(tags) LIKE ?",
 			searchTerm, searchTerm, searchTerm,
 		).Find(&posts)
@@ -834,7 +839,7 @@ func BenchmarkSearchPosts(b *testing.B) {
 
 func TestErrorHandling(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 
 	t.Run("Invalid JSON in create post", func(t *testing.T) {
 		r := setupTestRouter()
@@ -885,7 +890,7 @@ func TestErrorHandling(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		// Réouvrir pour les tests suivants
-		db = setupTestDB(t)
+		clblog.GetInstance().Db = setupTestDB(t)
 	})
 }
 
@@ -896,7 +901,7 @@ func TestPaginationLogic(t *testing.T) {
 
 	// Créer 25 posts
 	for i := 1; i <= 25; i++ {
-		testDB.Create(&Post{
+		testDB.Create(&clposts.Post{
 			BlogID:  0,
 			Title:   fmt.Sprintf("Post %d", i),
 			Content: fmt.Sprintf("Content %d", i),
@@ -919,7 +924,7 @@ func TestPaginationLogic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var posts []Post
+			var posts []clposts.Post
 			offset := (tt.page - 1) * tt.limit
 			testDB.Order("created_at desc, id desc").Limit(tt.limit).Offset(offset).Find(&posts)
 
@@ -936,7 +941,7 @@ func TestPaginationLogic(t *testing.T) {
 
 func TestInputValidation(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
 
 	t.Run("XSS Prevention in Comments", func(t *testing.T) {
@@ -944,8 +949,8 @@ func TestInputValidation(t *testing.T) {
 
 		r.POST("/api/posts/:id/comments", addCommentAPI)
 
-		captcha = clcaptchas.New("", 0)
-		data, err := captcha.GenerateCaptcha(false)
+		clblog.GetInstance().Captcha = clcaptchas.New("", 0)
+		data, err := clblog.GetInstance().Captcha.GenerateCaptcha(false)
 		assert.Equal(t, nil, err)
 
 		comment := CreateCommentRequest{
@@ -964,7 +969,7 @@ func TestInputValidation(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, w.Code)
 
 		// Vérifier que le contenu est stocké tel quel (l'échappement se fait à l'affichage)
-		var createdComment Comment
+		var createdComment clposts.Comment
 		json.Unmarshal(w.Body.Bytes(), &createdComment)
 		assert.Contains(t, createdComment.Author, "<script>")
 	})
@@ -979,7 +984,7 @@ func TestInputValidation(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var posts []Post
+		var posts []clposts.Post
 		json.Unmarshal(w.Body.Bytes(), &posts)
 		// Devrait retourner 0 résultats car GORM échappe les paramètres
 		assert.Len(t, posts, 0)
@@ -1015,11 +1020,11 @@ func TestInputValidation(t *testing.T) {
 
 func TestSessionManagement(t *testing.T) {
 	r := setupTestRouter()
-	configuration = setupTestConfig()
+	clblog.GetInstance().Configuration = setupTestConfig()
 
 	// Créer un hash valide
 	hash, _ := HashPassword("testpass")
-	configuration.User.Hash = hash
+	clblog.GetInstance().Configuration.User.Hash = hash
 
 	r.POST("/admin/login", loginHandler)
 	r.POST("/admin/logout", logoutHandler)
@@ -1123,7 +1128,7 @@ func TestRegressionEmptyTags(t *testing.T) {
 	testDB := setupTestDB(t)
 
 	// Test qu'un post sans tags fonctionne correctement
-	post := &Post{
+	post := &clposts.Post{
 		BlogID:   0,
 		Title:    "Post without tags",
 		Content:  "Content",
@@ -1135,7 +1140,7 @@ func TestRegressionEmptyTags(t *testing.T) {
 	assert.Empty(t, post.Tags)
 
 	// Récupérer et vérifier
-	var retrieved Post
+	var retrieved clposts.Post
 	testDB.First(&retrieved, post.ID)
 	assert.Empty(t, retrieved.TagsList)
 }
@@ -1146,7 +1151,7 @@ func TestRegressionLongContent(t *testing.T) {
 	// Créer un contenu très long
 	longContent := strings.Repeat("This is a very long content. ", 1000)
 
-	post := &Post{
+	post := &clposts.Post{
 		BlogID:  0,
 		Title:   "Long post",
 		Content: longContent,
@@ -1155,7 +1160,7 @@ func TestRegressionLongContent(t *testing.T) {
 	err := testDB.Create(post).Error
 	assert.NoError(t, err)
 
-	var retrieved Post
+	var retrieved clposts.Post
 	testDB.First(&retrieved, post.ID)
 	assert.Equal(t, longContent, retrieved.Content)
 }
@@ -1210,13 +1215,13 @@ func TestDatabaseMigration(t *testing.T) {
 // ============= Tests pour les flux RSS =============
 func TestRSSHandler(t *testing.T) {
 	testDB := setupTestDB(t)
-	db = testDB
+	clblog.GetInstance().Db = testDB
 	r := setupTestRouter()
-	configuration = setupTestConfig()
+	clblog.GetInstance().Configuration = setupTestConfig()
 
 	// Créer quelques posts de test
 	for i := 1; i <= 3; i++ {
-		post := &Post{
+		post := &clposts.Post{
 			BlogID:   0,
 			Title:    fmt.Sprintf("Post %d", i),
 			Content:  fmt.Sprintf("Content for post %d", i),
@@ -1227,7 +1232,7 @@ func TestRSSHandler(t *testing.T) {
 		testDB.Create(post)
 	}
 
-	r.GET("/feed/rss", rssHandler)
+	r.GET("/feed/rss", handlers_rss.RssHandler)
 
 	req := httptest.NewRequest("GET", "/feed/rss", nil)
 	req.Host = "localhost:8080"
@@ -1238,11 +1243,11 @@ func TestRSSHandler(t *testing.T) {
 	assert.Contains(t, w.Header().Get("Content-Type"), "application/rss+xml")
 
 	// Vérifier que le XML est valide
-	var rss RSS
+	var rss clrss.RSS
 	err := xml.Unmarshal(w.Body.Bytes(), &rss)
 	assert.NoError(t, err)
 	assert.Equal(t, "2.0", rss.Version)
-	assert.Equal(t, configuration.Blogs[0].SiteName, rss.Channel.Title)
+	assert.Equal(t, clblog.GetInstance().Configuration.Blogs[0].SiteName, rss.Channel.Title)
 	assert.Len(t, rss.Channel.Items, 3)
 
 	// Vérifier le contenu du premier item
@@ -1250,17 +1255,4 @@ func TestRSSHandler(t *testing.T) {
 	assert.Equal(t, "Post 3", firstItem.Title) // Le plus récent
 	assert.Equal(t, "http://localhost:8080/post/3", firstItem.Link)
 	assert.Equal(t, "Excerpt 3", firstItem.Description)
-}
-
-// Theme
-func TestTheme(t *testing.T) {
-	assert.Equal(t, GenerateThemeCSS(""), GenerateThemeCSS("#007bff"))
-	assert.Equal(t, GenerateThemeCSS("blue"), GenerateThemeCSS("#007bff"))
-	assert.Equal(t, GenerateThemeCSS("red"), GenerateThemeCSS("#dc3545"))
-}
-
-func TestSlugify(t *testing.T) {
-	assert.Equal(t, "", slugify(""))
-	assert.Equal(t, "abcd01234--", slugify("abcd01234--"))
-	assert.Equal(t, "abc-d01234--", slugify("%#abc d01234--"))
 }

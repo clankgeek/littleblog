@@ -13,6 +13,7 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 - Administration des articles
 - Upload d'images
 - Menu avec différente catégories
+- Analytics pour avoir quelques stats sur les visites, par blogs.
 
 ## Composants
 
@@ -41,9 +42,7 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 
 ## Compilation
 
-Utilise make, gcc et golang pour compiler
-
-### Ubuntu
+Utilise **make**, **gcc** et **golang** pour compiler
 
 Compile le binaire littleblog si vous avez un environnement golang de configuré
 
@@ -51,7 +50,7 @@ Compile le binaire littleblog si vous avez un environnement golang de configuré
   make build
 ```
 
-Sinon vous pouvez utiliser le builder via une image docker
+Sinon vous pouvez utiliser le builder qui utilise une image docker
 
 ```bash
   ./docker-build.sh
@@ -78,6 +77,14 @@ database:
   path: ./blog.db
   #db: mysql
   #dsn: mon_utilisateur:motdepasse_utilisateur@tcp(127.0.0.1:3306)/ma_base?charset=utf8mb4&parseTime=True&loc=Local
+analytics:
+  enabled: true # active l'analytics pour avoir quelques stats sur les visites
+  db: sqlite # si vide, utilise la base de database.db ou mysql
+  path: ./analytics.db # db pour analytics
+  #dsn: mon_utilisateur:motdepasse_utilisateur@tcp(127.0.0.1:3306)/analytics?charset=utf8mb4&parseTime=True&loc=Local
+  redis:
+    addr: 127.0.0.1:6379 # redis pour analytics
+    db: 1 # en base de donnée différente de database.redis.db
 user:
   login: admin
   pass: admin1234 # mot de passe sera hashé en Argon2i au premier démarrage

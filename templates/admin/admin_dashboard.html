@@ -63,6 +63,13 @@
                     <div class="action-title">Voir le Site</div>
                     <div class="action-description">Aperçu public</div>
                 </a>
+                {{- if .analyticsEnabled }}
+                <a href="/admin/analytics" class="action-card">
+                    <div class="action-icon"><img src="/files/img/stats.svg" class="icon"></div>
+                    <div class="action-title">Analytics</div>
+                    <div class="action-description">Statistiques</div>
+                </a>
+                {{- end }}
             </div>
         </div>
     </div>

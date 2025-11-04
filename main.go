@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/json"
-	"encoding/xml"
 	"flag"
 	"fmt"
 	"html/template"
@@ -14,26 +12,26 @@ import (
 	"image/png"
 	"io"
 	"io/fs"
-	"littleblog/internal/clcaptchas"
-	"littleblog/internal/clconfig"
-	"littleblog/internal/climages"
-	"littleblog/internal/cllog"
 	"littleblog/internal/clmiddleware"
-	"littleblog/internal/gormzerologger"
+	handlers_analytics "littleblog/internal/handlers/analytics"
+	handlers_rss "littleblog/internal/handlers/rss"
+	"littleblog/internal/models/clanalytics"
+	"littleblog/internal/models/clblog"
+	"littleblog/internal/models/clconfig"
+	"littleblog/internal/models/climages"
+	"littleblog/internal/models/cllog"
+	"littleblog/internal/models/clmarkdown"
+	"littleblog/internal/models/clposts"
 	mrand "math/rand"
-	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/andskur/argon2-hashing"
 	"github.com/gin-contrib/sessions"
@@ -42,31 +40,14 @@ import (
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
 	"github.com/tdewolff/minify/v2/js"
-	stripmd "github.com/writeas/go-strip-markdown"
-	"github.com/yuin/goldmark"
-	emoji "github.com/yuin/goldmark-emoji"
-	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/renderer/html"
-	"github.com/yuin/goldmark/text"
-	"github.com/yuin/goldmark/util"
-	"gorm.io/driver/mysql"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-const VERSION string = "0.7.0"
+const VERSION string = "0.8.0"
 
 // global instance
 var (
-	db            *gorm.DB
-	md            goldmark.Markdown
-	configuration *clconfig.Config
-	BuildID       string
-	captcha       *clcaptchas.Captchas
-	Blogs         map[string]clconfig.BlogsConfig
-	BlogsId       map[uint]string
+	BuildID string
 )
 
 //go:embed templates/**/*.html
@@ -76,35 +57,6 @@ var templatesFS embed.FS
 //go:embed ressources/css
 //go:embed ressources/img
 var staticFS embed.FS
-
-// Models avec tags GORM
-type Post struct {
-	ID          uint          `json:"id" gorm:"primaryKey"`
-	BlogID      uint          `json:"blog_id" gorm:"index:idx_blog_hide"`
-	Title       string        `json:"title" gorm:"not null"`
-	Content     string        `json:"content" gorm:"type:text;not null"`
-	ContentHTML template.HTML `json:"content_html" gorm:"-"`
-	Excerpt     string        `json:"excerpt"`
-	FirstImage  string        `json:"image" gorm:"type:text"`
-	Author      string        `json:"author" gorm:"not null"`
-	CreatedAt   time.Time     `json:"created_at" gorm:"autoCreateTime;index"`
-	UpdatedAt   time.Time     `json:"updated_at" gorm:"autoUpdateTime"`
-	Tags        string        `json:"-" gorm:"type:text"`
-	Category    string        `json:"category" gorm:"type:text"`
-	TagsList    []string      `json:"tags" gorm:"-"`
-	Comments    []Comment     `json:"comments,omitempty" gorm:"foreignKey:PostID"`
-	Hide        bool          `json:"hide" gorm:"type:bool;index:idx_blog_hide"`
-}
-
-type Comment struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	PostID    uint      `json:"post_id" gorm:"not null;index"`
-	Author    string    `json:"author" gorm:"not null"`
-	Content   string    `json:"content" gorm:"type:text;not null"`
-	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
-	Post      Post      `json:"-" gorm:"foreignKey:PostID"`
-}
 
 // Requests structs
 type CreateCommentRequest struct {
@@ -137,150 +89,6 @@ type UpdatePostRequest struct {
 	Tags     []string `json:"tags"`
 	Category string   `json:"category"`
 	Hide     bool     `json:"hide"`
-}
-
-// RSS représente le flux RSS complet
-type RSS struct {
-	XMLName xml.Name `xml:"rss"`
-	Version string   `xml:"version,attr"`
-	Channel Channel  `xml:"channel"`
-}
-
-// Channel représente le canal RSS
-type Channel struct {
-	Title         string    `xml:"title"`
-	Link          string    `xml:"link"`
-	Description   string    `xml:"description"`
-	Language      string    `xml:"language"`
-	Copyright     string    `xml:"copyright,omitempty"`
-	Generator     string    `xml:"generator"`
-	LastBuildDate string    `xml:"lastBuildDate"`
-	Items         []RSSItem `xml:"item"`
-}
-
-// RSSItem représente un article dans le flux RSS
-type RSSItem struct {
-	Title       string        `xml:"title"`
-	Link        string        `xml:"link"`
-	Description string        `xml:"description"`
-	Author      string        `xml:"author,omitempty"`
-	Category    string        `xml:"category,omitempty"`
-	GUID        string        `xml:"guid"`
-	PubDate     string        `xml:"pubDate"`
-	Enclosure   *RSSEnclosure `xml:"enclosure"`
-}
-
-type RSSEnclosure struct {
-	URL    string `xml:"url,attr"`
-	Length int64  `xml:"length,attr"`
-	Type   string `xml:"type,attr"`
-}
-
-type externalLinkTransformer struct{}
-
-// Remplir Excerpt calculé a partir de content
-func (p *Post) FillExcerpt() error {
-	// Générer l'excerpt texte si vide
-	if p.Content != "" {
-		if p.Excerpt == "" {
-			p.Excerpt = CleanMarkdownForExcerpt(p.Content)
-			p.Excerpt = ExtractExcerpt(p.Excerpt, 500)
-		} else {
-			p.Excerpt = CleanMarkdownForExcerpt(p.Excerpt)
-		}
-		p.FirstImage = ""
-
-		found, l := ExtractImages(p.Content, true, true)
-		if found {
-			p.FirstImage = l[0]
-		}
-	}
-	return nil
-}
-
-func CleanMarkdownForExcerpt(content string) string {
-	// supprimer les images
-	reImage := regexp.MustCompile(`!\[.*?\]\(.*?\)`)
-	return reImage.ReplaceAllString(content, "")
-}
-
-// ExtractExcerpt génère automatiquement un résumé depuis le contenu Markdown
-func ExtractExcerpt(text string, maxLength int) string {
-	// Si le texte est déjà assez court
-	if utf8.RuneCountInString(text) <= maxLength {
-		return text
-	}
-
-	runes := []rune(text)
-
-	// D'abord, chercher une fin de phrase (. ! ?)
-	cutPoint := maxLength
-	for i := maxLength - 1; i >= maxLength-100 && i >= 0; i-- {
-		if runes[i] == '.' || runes[i] == '!' || runes[i] == '?' {
-			// Inclure le point/ponctuation et avancer d'un caractère
-			cutPoint = i + 1
-			break
-		}
-	}
-
-	// Si aucune fin de phrase trouvée, chercher un espace
-	if cutPoint == maxLength {
-		for i := maxLength - 1; i >= maxLength-50 && i >= 0; i-- {
-			if runes[i] == ' ' {
-				cutPoint = i
-				break
-			}
-		}
-	}
-
-	result := strings.TrimSpace(string(runes[:cutPoint]))
-
-	// Ajouter "..." seulement si on n'a pas terminé sur une ponctuation
-	lastChar := runes[cutPoint-1]
-	if lastChar != '.' && lastChar != '!' && lastChar != '?' {
-		result += "..."
-	}
-
-	return result
-}
-
-// ExtractImages extrait l'URL des images du Markdown
-// Exemple: ![monimage.jpg](/static/uploads/1759683627_d4hhlyrc.jpg)
-func ExtractImages(markdown string, firstOnly bool, fileOnly bool) (bool, []string) {
-	if markdown == "" {
-		return false, nil
-	}
-
-	// Pattern pour les images markdown: ![alt](url)
-	reImage := regexp.MustCompile(`!\[[^\]]*\]\(([^)]+)\)`)
-
-	var l []string
-	found := false
-
-	// Utiliser FindAllStringSubmatch au lieu de FindStringSubmatch
-	matches := reImage.FindAllStringSubmatch(markdown, -1)
-
-	for _, match := range matches {
-		if len(match) > 1 {
-			if fileOnly {
-				// match[1] contient déjà le chemin capturé par le groupe ()
-				imageURL := strings.TrimSpace(match[1])
-				imageURL = strings.Trim(imageURL, `"' `)
-				l = append(l, imageURL)
-			} else {
-				// match[0] contient toute la correspondance ![alt](url)
-				imageURL := strings.TrimSpace(match[0])
-				l = append(l, imageURL)
-			}
-			found = true
-
-			if firstOnly {
-				break
-			}
-		}
-	}
-
-	return found, l
 }
 
 // Debug logue un message de debug
@@ -333,6 +141,21 @@ func loadAndConvertConfig(configFile string) (*clconfig.Config, error) {
 		return nil, fmt.Errorf("database.db ne peut pas être vide")
 	}
 
+	if conf.Analytics.Enabled {
+		if conf.Analytics.Db == "sqlite" && conf.Analytics.Path == "" {
+			return nil, fmt.Errorf("analytics.path ne peut pas être vide en mode sqlite")
+		}
+		if conf.Analytics.Db == "mysql" && conf.Analytics.Dsn == "" {
+			return nil, fmt.Errorf("analytics.dsn ne peut pas être vide en mode mysql")
+		}
+		if conf.Analytics.Redis.Addr == "" {
+			return nil, fmt.Errorf("analytics.redis.addr ne peut pas être vide")
+		}
+		if conf.Database.Redis.Db == conf.Analytics.Redis.Db {
+			return nil, fmt.Errorf("analytics.redis.db ne peut pas etre identique a database.redis.db")
+		}
+	}
+
 	if conf.Listen.Website == "" {
 		conf.Listen.Website = "localhost:8080"
 	}
@@ -357,95 +180,7 @@ func loadAndConvertConfig(configFile string) (*clconfig.Config, error) {
 		}
 	}
 
-	BlogsId = make(map[uint]string, len(conf.Blogs))
-	Blogs = make(map[string]clconfig.BlogsConfig, len(conf.Blogs))
-	var idfound []uint
-	for _, item := range conf.Blogs {
-		if slices.Contains(idfound, item.Id) {
-			return nil, fmt.Errorf("l'id dans les blogs doit etre unique")
-		}
-		idfound = append(idfound, item.Id)
-
-		if item.Favicon == "" {
-			item.Favicon = "/files/img/linux.png"
-		}
-
-		item.LinkRSS, err = GenerateDynamicRSS(item.Menu, item.SiteName)
-		if err != nil {
-			return nil, err
-		}
-		item.ThemeCSS = GenerateThemeCSS(item.Theme)
-		Blogs[item.Hostname] = item
-		BlogsId[item.Id] = item.Hostname
-	}
-
 	return conf, nil
-}
-
-func (t *externalLinkTransformer) Transform(node *ast.Document, reader text.Reader, pc parser.Context) {
-	ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-
-		if link, ok := n.(*ast.Link); ok {
-			link.SetAttributeString("target", []byte("_blank"))
-			link.SetAttributeString("rel", []byte("noopener noreferrer"))
-		}
-
-		return ast.WalkContinue, nil
-	})
-}
-
-// Initialiser le convertisseur Markdown
-func initMarkdown() {
-	md = goldmark.New(
-		goldmark.WithExtensions(
-			extension.GFM,
-			extension.Table,
-			extension.Strikethrough,
-			extension.TaskList,
-			emoji.Emoji,
-		),
-		goldmark.WithParserOptions(
-			parser.WithAutoHeadingID(),
-			parser.WithASTTransformers(
-				util.Prioritized(&externalLinkTransformer{}, 100),
-			),
-		),
-		goldmark.WithRendererOptions(
-			html.WithHardWraps(),
-			html.WithXHTML(),
-			html.WithUnsafe(),
-		),
-	)
-	LogInfo("Convertisseur Markdown initialisé")
-}
-
-// Convertir Markdown en HTML
-func convertMarkdownToHTML(markdown string) template.HTML {
-	var buf bytes.Buffer
-	if err := md.Convert([]byte(markdown), &buf); err != nil {
-		LogError(err, "Erreur conversion Markdown")
-		return template.HTML("<pre>" + template.HTMLEscapeString(markdown) + "</pre>")
-	}
-	return template.HTML(buf.String())
-}
-
-// Hooks GORM
-func (p *Post) BeforeSave(tx *gorm.DB) error {
-	if len(p.TagsList) > 0 {
-		p.Tags = strings.Join(p.TagsList, ",")
-	}
-	return nil
-}
-
-func (p *Post) AfterFind(tx *gorm.DB) error {
-	if p.Tags != "" {
-		p.TagsList = strings.Split(p.Tags, ",")
-	}
-	p.ContentHTML = convertMarkdownToHTML(p.Content)
-	return nil
 }
 
 // Middleware d'authentification
@@ -467,44 +202,6 @@ func authRequired() gin.HandlerFunc {
 	}
 }
 
-func initDatabase() {
-	var err error
-
-	// Créer le logger GORM avec Zerolog
-	level := "warn"
-	if configuration.Logger.Level == "debug" || !configuration.Production {
-		level = "trace"
-	}
-	gormLogger := gormzerologger.New(level)
-
-	switch configuration.Database.Db {
-	case "sqlite":
-		db, err = gorm.Open(sqlite.Open(configuration.Database.Path), &gorm.Config{
-			Logger: gormLogger,
-		})
-	case "mysql":
-		db, err = gorm.Open(mysql.Open(configuration.Database.Dsn), &gorm.Config{
-			Logger: gormLogger,
-		})
-	default:
-		err = fmt.Errorf("le type de database doit etre sqlite ou mysql")
-	}
-
-	if err != nil {
-		LogFatal(err, "Erreur connexion base de données:")
-	}
-
-	err = db.AutoMigrate(&Post{}, &Comment{})
-	if err != nil {
-		LogFatal(err, "Erreur migration:")
-	}
-
-	var count int64
-	db.Model(&Post{}).Count(&count)
-
-	LogInfo("Base de données initialisée avec succès")
-}
-
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, length)
@@ -517,7 +214,7 @@ func generateRandomString(length int) string {
 func GenerateMenu(items []clconfig.MenuItem, category string) template.HTML {
 	menuStr := ""
 	for _, item := range items {
-		key := slugify(item.Key)
+		key := clblog.Slugify(item.Key)
 		active := ""
 		if key == category && item.Link == "" {
 			active = " active"
@@ -537,96 +234,6 @@ func GenerateMenu(items []clconfig.MenuItem, category string) template.HTML {
 		menuStr += fmt.Sprintf("<a href=\"%s\" class=\"nav-link%s\"%s>%s%s</a>&nbsp;", target, active, blank, img, item.Value)
 	}
 	return safeHtml(menuStr)
-}
-
-func GenerateDynamicRSS(Menu []clconfig.MenuItem, SiteName string) (template.HTML, error) {
-	rssStr := ""
-	for _, item := range Menu {
-		if item.Key == "" {
-			continue
-		}
-		slugifiedKey := slugify(item.Key)
-		if slugifiedKey == "files" || slugifiedKey == "static" {
-			return "", fmt.Errorf("la clé du menu doit etre différente de 'files' et de 'static'")
-		}
-		rssStr += fmt.Sprintf("    <link rel=\"alternate\" type=\"application/rss+xml\" title=\"%s - %s\" href=\"/rss.xml/%s\"/>\n", SiteName, slugifiedKey, slugifiedKey)
-	}
-	return safeHtml(rssStr), nil
-}
-
-// GenerateThemeCSS génère le CSS pour un thème basé sur une couleur
-func GenerateThemeCSS(colorName string) string {
-	// Couleurs de base prédéfinies
-	baseColors := map[string]string{
-		"blue":   "#007bff",
-		"red":    "#dc3545",
-		"green":  "#28a745",
-		"yellow": "#ffc107",
-		"purple": "#6f42c1",
-		"cyan":   "#17a2b8",
-		"orange": "#fd7e14",
-		"pink":   "#e83e8c",
-		"gray":   "#6c757d",
-		"grey":   "#6c757d",
-		"black":  "#000000",
-	}
-
-	// Récupérer la couleur de base
-	baseHex, exists := baseColors[strings.ToLower(colorName)]
-	if !exists {
-		// Si la couleur n'existe pas, on assume que c'est un hex
-		if strings.HasPrefix(colorName, "#") {
-			baseHex = colorName
-		} else {
-			baseHex = "#007bff" // Fallback sur blue
-		}
-	}
-
-	baseColor := climages.HexToColor(baseHex)
-
-	// Générer les variations
-	primaryHover := baseColor.Darken(20)
-	success := baseColor.Lighten(15)
-	danger := baseColor.Darken(30)
-	warning := baseColor.Lighten(40)
-	info := baseColor.Darken(10)
-	light := baseColor.Lighten(80)
-	dark := baseColor.Darken(70)
-	border := baseColor.Lighten(60)
-
-	// Générer le CSS
-	css := fmt.Sprintf(`:root {
- --primary-color: %s;
- --primary-hover: %s;
- --success-color: %s;
- --danger-color: %s;
- --warning-color: %s;
- --info-color: %s;
- --light-color: %s;
- --dark-color: %s;
- --border-color: %s;
- --shadow: 0 2px 10px rgba(%d,%d,%d,0.1);
- --shadow-hover: 0 8px 25px rgba(%d,%d,%d,0.15);
- --border-radius: 8px;
- --transition: all 0.3s ease;
- --gradient: linear-gradient(135deg, %s 0%%, %s 100%%);
-}`,
-		baseColor.ToHex(),
-		primaryHover.ToHex(),
-		success.ToHex(),
-		danger.ToHex(),
-		warning.ToHex(),
-		info.ToHex(),
-		light.ToHex(),
-		dark.ToHex(),
-		border.ToHex(),
-		baseColor.R, baseColor.G, baseColor.B,
-		baseColor.R, baseColor.G, baseColor.B,
-		baseColor.ToHex(),
-		primaryHover.ToHex(),
-	)
-
-	return css
 }
 
 func safeCSS(css string) template.CSS {
@@ -686,7 +293,11 @@ func ServeMinifiedStatic(m *minify.M) gin.HandlerFunc {
 			minified, err = m.Bytes("text/css", content)
 		case ".js":
 			contentType = "application/javascript"
-			minified, err = m.Bytes("application/javascript", content)
+			if strings.HasSuffix(path, "min.js") {
+				minified = content
+			} else {
+				minified, err = m.Bytes("application/javascript", content)
+			}
 		case ".svg":
 			// En-têtes de cache pour SVG
 			c.Header("Cache-Control", "public, max-age=31536000, immutable")
@@ -702,7 +313,7 @@ func ServeMinifiedStatic(m *minify.M) gin.HandlerFunc {
 			minified = content
 		}
 
-		// En-têtes de cache pour CSS et JS
+		// En-têtes de cache
 		c.Header("Cache-Control", "public, max-age=31536000, immutable")
 		c.Header("ETag", generateETag(minified))
 
@@ -724,7 +335,7 @@ func getTemplates() *template.Template {
 	}).ParseFS(templatesFS, "templates/*/*.html"))
 }
 
-func initConfiguration() {
+func initConfiguration() *clconfig.Config {
 	configFile, shouldCreateExample, versionDisplay, err := parseCommandLineArgs()
 	if err != nil {
 		fmt.Println("Usage:")
@@ -748,11 +359,13 @@ func initConfiguration() {
 		os.Exit(1)
 	}
 
-	configuration = conf
-	captcha = clcaptchas.New(configuration.Database.Redis.Addr, configuration.Database.Redis.Db)
+	return conf
+
 }
 
 func newServer() *gin.Engine {
+	configuration := clblog.GetInstance().Configuration
+
 	if configuration.Production {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -780,23 +393,9 @@ func newServer() *gin.Engine {
 	return r
 }
 
-func slugify(s string) string {
-	var result strings.Builder
+func setRoutes(r *gin.Engine, analytics bool, analyticsMiddleware *clmiddleware.AnalyticsMiddleware) {
+	lb := clblog.GetInstance()
 
-	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			result.WriteRune(r)
-		} else if unicode.IsSpace(r) {
-			result.WriteRune('-')
-		} else if r == '-' {
-			result.WriteRune(r)
-		}
-	}
-
-	return result.String()
-}
-
-func setRoutes(r *gin.Engine) {
 	m := minify.New()
 	m.AddFunc("text/css", css.Minify)
 	m.AddFunc("application/javascript", js.Minify)
@@ -805,7 +404,7 @@ func setRoutes(r *gin.Engine) {
 	middlewareLimiter := clmiddleware.NewLimiter()
 
 	// Route statiques
-	r.Static("/static/", configuration.StaticPath)
+	r.Static("/static/", lb.Configuration.StaticPath)
 	r.GET("/files/css/*.css", ServeMinifiedStatic(m))
 	r.GET("/files/js/*.js", ServeMinifiedStatic(m))
 	r.GET("/files/img/*.svg", ServeMinifiedStatic(m))
@@ -818,13 +417,20 @@ func setRoutes(r *gin.Engine) {
 	r.GET("/:category", indexHandler)
 	r.GET("/post/:id", postHandler)
 	r.GET("/files/captcha", func(c *gin.Context) {
-		captcha.CaptchaHandler(c, configuration.Production)
+		lb.Captcha.CaptchaHandler(c, lb.Configuration.Production)
 	})
 
 	// Routes d'authentification
 	r.GET("/admin/login", loginPageHandler)
 	r.POST("/admin/login", middlewareLimiter, loginHandler)
 	r.POST("/admin/logout", logoutHandler)
+
+	var analyticsService *clanalytics.AnalyticsService
+	var analyticsHandler *handlers_analytics.AnalyticsHandler
+	if analytics {
+		analyticsService = clanalytics.NewAnalyticsService(analyticsMiddleware.Db, analyticsMiddleware.Redis)
+		analyticsHandler = handlers_analytics.NewAnalyticsHandler(analyticsService)
+	}
 
 	// Routes d'administration protégées
 	admin := r.Group("/admin")
@@ -838,6 +444,12 @@ func setRoutes(r *gin.Engine) {
 		admin.GET("/posts/:id/edit", editPostPageHandler)
 		admin.PUT("/posts/:id", updatePostHandler)
 		admin.DELETE("/posts/:id", deletePostHandler)
+
+		if analytics {
+			admin.GET("/stats", analyticsHandler.GetStats30Days)
+			admin.GET("/realtime", analyticsHandler.GetRealtimeStats)
+			admin.GET("/analytics", adminAnalyticsHandler)
+		}
 	}
 
 	// API publiques
@@ -852,11 +464,12 @@ func setRoutes(r *gin.Engine) {
 	}
 
 	// Flux RSS
-	r.GET("/rss.xml", rssHandler)
-	r.GET("/rss.xml/:category", rssHandler)
+	r.GET("/rss.xml", handlers_rss.RssHandler)
+	r.GET("/rss.xml/:category", handlers_rss.RssHandler)
 }
 
 func startServer(r *gin.Engine) {
+	configuration := clblog.GetInstance().Configuration
 	LogPrintf("Website démarré sur http://%s", configuration.Listen.Website)
 	LogPrintf("Admin: http://%s/admin/login", configuration.Listen.Website)
 	r.Run(configuration.Listen.Website)
@@ -883,91 +496,29 @@ func parseCommandLineArgs() (configFile string, shouldCreateExample bool, versio
 	return *config, false, false, nil
 }
 
-func displayConfiguration(config *clconfig.Config) {
-	LogPrintf("Littleblog version %s", VERSION)
-
-	LogPrintf("Mode Production %v", config.Production)
-	LogPrintf("Administrateur login %s", config.User.Login)
-
-	LogPrintf("Database")
-	if config.Database.Db == "sqlite" {
-		LogPrintf("  • Type sqlite")
-		LogPrintf("  • Path %s", config.Database.Path)
-	}
-	if config.Database.Db == "mysql" {
-		LogPrintf("  • Type mysql")
-		LogPrintf("  • DSN %s", config.Database.Dsn)
-	}
-	if config.Database.Redis.Addr != "" {
-		LogPrintf("  • Cache redis %s", config.Database.Redis)
-	}
-
-	// Logger
-	LogPrintf("Logger en level %s", config.Logger.Level)
-	if config.Logger.File.Enable {
-		LogPrintf("  Log en fichier activé")
-		LogPrintf("  • Path %s", config.Logger.File.Path)
-		LogPrintf("  • Max size %d", config.Logger.File.MaxSize)
-		LogPrintf("  • Max age %d", config.Logger.File.MaxAge)
-		LogPrintf("  • Max backup %d", config.Logger.File.MaxBackups)
-		LogPrintf("  • Compression %v", config.Logger.File.Compress)
-	} else {
-		LogPrintf("  Log en fichier désactivé")
-	}
-	if config.Logger.Syslog.Enable {
-		LogPrintf("  Log en syslog activé")
-		LogPrintf("  • Protocol %s", config.Logger.Syslog.Protocol)
-		LogPrintf("  • Address %s", config.Logger.Syslog.Address)
-		LogPrintf("  • Tag %s", config.Logger.Syslog.Tag)
-		LogPrintf("  • Priority %v", config.Logger.Syslog.Priority)
-	} else {
-		LogPrintf("  Log en syslog désactivé")
-	}
-
-	LogPrintf("Liste des blogs")
-	for _, blog := range config.Blogs {
-		LogPrintf("  • \"%s\" avec l'id %d et le hostname %s", blog.SiteName, blog.Id, blog.Hostname)
-	}
-}
-
 func main() {
 	if BuildID == "" {
 		BuildID = VERSION
 	}
 
-	initConfiguration()
-	cllog.InitLogger(configuration.Logger, configuration.Production)
-	displayConfiguration(configuration)
+	configuration := initConfiguration()
 
-	initMarkdown()
-	initDatabase()
+	clmarkdown.InitMarkdown()
+	cllog.InitLogger(configuration.Logger, configuration.Production)
+
+	blog := clblog.Init(configuration, VERSION, BuildID)
+
+	clconfig.DisplayConfiguration(configuration, VERSION)
 
 	r := newServer()
 
-	clmiddleware.InitMiddleware(r, Blogs, configuration.Production)
-	setRoutes(r)
+	analyticsMiddleware := clmiddleware.InitMiddleware(r, blog)
+	setRoutes(r, configuration.Analytics.Enabled, analyticsMiddleware)
 
 	startServer(r)
 }
 
 // ============= HANDLERS PUBLICS =============
-
-func getConfItem(c *gin.Context, withId bool, id uint) clconfig.BlogsConfig {
-	if withId {
-		if item, ok := BlogsId[id]; ok {
-			return Blogs[item]
-		}
-	} else {
-		host, found := c.Get("hostname")
-		if found {
-			return Blogs[host.(string)]
-		}
-	}
-	if item, ok := BlogsId[0]; ok {
-		return Blogs[item]
-	}
-	return clconfig.BlogsConfig{}
-}
 
 func themeHandler(c *gin.Context) {
 	idStr := c.Param("id")
@@ -975,7 +526,8 @@ func themeHandler(c *gin.Context) {
 	if err != nil {
 		blogId = 0
 	}
-	item := getConfItem(c, true, uint(blogId))
+
+	item := clblog.GetInstance().GetConfItem(c, true, uint(blogId))
 
 	c.Header("Content-Type", "text/css; charset=utf-8")
 	c.Header("Cache-Control", "public, max-age=3600")
@@ -988,14 +540,14 @@ func themeHandler(c *gin.Context) {
 func indexHandler(c *gin.Context) {
 	session := sessions.Default(c)
 	isAdmin := session.Get("user_id") != nil
-	category := slugify(c.Param("category"))
+	category := clblog.Slugify(c.Param("category"))
 	memories := ""
 
 	if isAdmin {
 		memories = getMemUsage()
 	}
 
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 	c.HTML(http.StatusOK, "index", gin.H{
 		"blogId":          item.Id,
 		"title":           item.SiteName,
@@ -1018,7 +570,7 @@ func indexHandler(c *gin.Context) {
 }
 
 func pageNotFound(c *gin.Context, title string) {
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 	c.HTML(http.StatusNotFound, "404_not_found", gin.H{
 		"blogId":      item.Id,
 		"title":       title,
@@ -1041,10 +593,10 @@ func postHandler(c *gin.Context) {
 		pageNotFound(c, "Page non trouvée")
 		return
 	}
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 
-	var post Post
-	result := db.Where("blog_id = ? AND NOT hide", item.Id).First(&post, uint(id))
+	var post clposts.Post
+	result := clblog.GetInstance().Db.Where("blog_id = ? AND NOT hide", item.Id).First(&post, uint(id))
 	if result.Error != nil {
 		pageNotFound(c, "Article non trouvé")
 		return
@@ -1081,7 +633,7 @@ func loginPageHandler(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, "/admin")
 		return
 	}
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 
 	c.HTML(http.StatusOK, "admin_login", gin.H{
 		"blogId":   item.Id,
@@ -1100,6 +652,8 @@ func loginHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Données invalides"})
 		return
 	}
+
+	configuration := clblog.GetInstance().Configuration
 
 	// Vérification login / pass
 	err := argon2.CompareHashAndPassword([]byte(configuration.User.Hash), []byte(req.Password))
@@ -1135,17 +689,43 @@ func logoutHandler(c *gin.Context) {
 
 // ============= HANDLERS D'ADMINISTRATION =============
 
+func adminAnalyticsHandler(c *gin.Context) {
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
+
+	session := sessions.Default(c)
+	username := session.Get("username")
+
+	c.HTML(http.StatusOK, "admin_analytics", gin.H{
+		"blogId":      item.Id,
+		"title":       "Analytics Admin",
+		"siteName":    item.SiteName,
+		"logo":        item.Logo,
+		"icone":       item.Favicon,
+		"pageTitle":   "Analytics",
+		"pageIcon":    "📊",
+		"currentPage": "analytics",
+		"username":    username,
+		"currentYear": time.Now().Year(),
+		"isAdmin":     true,
+		"version":     VERSION,
+		"BuildID":     BuildID,
+		"memories":    getMemUsage(),
+		"renderTime":  clmiddleware.GetRenderTime(c),
+	})
+}
+
 func adminDashboardHandler(c *gin.Context) {
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
+	db := clblog.GetInstance().Db
 
 	var stats struct {
 		TotalPosts    int64
 		TotalComments int64
-		RecentPosts   []Post
+		RecentPosts   []clposts.Post
 	}
 
-	db.Model(&Post{}).Where("blog_id = ?", item.Id).Count(&stats.TotalPosts)
-	db.Model(&Comment{}).
+	db.Model(&clposts.Post{}).Where("blog_id = ?", item.Id).Count(&stats.TotalPosts)
+	db.Model(&clposts.Comment{}).
 		Joins("JOIN posts ON posts.id = comments.post_id").
 		Where("posts.blog_id = ?", item.Id).
 		Count(&stats.TotalComments)
@@ -1156,22 +736,23 @@ func adminDashboardHandler(c *gin.Context) {
 	username := session.Get("username")
 
 	c.HTML(http.StatusOK, "admin_dashboard", gin.H{
-		"blogId":      item.Id,
-		"title":       "Dashboard Admin",
-		"siteName":    item.SiteName,
-		"logo":        item.Logo,
-		"icone":       item.Favicon,
-		"pageTitle":   "Dashboard",
-		"pageIcon":    "📊",
-		"currentPage": "dashboard",
-		"username":    username,
-		"stats":       stats,
-		"currentYear": time.Now().Year(),
-		"isAdmin":     true,
-		"version":     VERSION,
-		"BuildID":     BuildID,
-		"memories":    getMemUsage(),
-		"renderTime":  clmiddleware.GetRenderTime(c),
+		"blogId":           item.Id,
+		"title":            "Dashboard Admin",
+		"siteName":         item.SiteName,
+		"logo":             item.Logo,
+		"icone":            item.Favicon,
+		"pageTitle":        "Dashboard",
+		"pageIcon":         "📊",
+		"currentPage":      "dashboard",
+		"username":         username,
+		"stats":            stats,
+		"currentYear":      time.Now().Year(),
+		"isAdmin":          true,
+		"version":          VERSION,
+		"BuildID":          BuildID,
+		"memories":         getMemUsage(),
+		"renderTime":       clmiddleware.GetRenderTime(c),
+		"analyticsEnabled": clblog.GetInstance().Configuration.Analytics.Enabled,
 	})
 }
 
@@ -1222,10 +803,10 @@ func uploadImageHandler(c *gin.Context) {
 	// Redimensionner si nécessaire
 	processedImg := climages.Resize(img, 1600)
 
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 
 	// Créer le dossier uploads s'il n'existe pas
-	uploadsDir := fmt.Sprintf("%s/uploads/%d", configuration.StaticPath, item.Id)
+	uploadsDir := fmt.Sprintf("%s/uploads/%d", clblog.GetInstance().Configuration.StaticPath, item.Id)
 	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur création dossier"})
 		return
@@ -1294,8 +875,9 @@ func uploadImageHandler(c *gin.Context) {
 }
 
 func adminPostsHandler(c *gin.Context) {
-	item := getConfItem(c, false, 0)
-	var posts []Post
+	db := clblog.GetInstance().Db
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
+	var posts []clposts.Post
 	db.Where("blog_id = ?", item.Id).Order("created_at desc").Find(&posts)
 
 	session := sessions.Default(c)
@@ -1323,7 +905,7 @@ func adminPostsHandler(c *gin.Context) {
 func getOptionsCategory(item clconfig.BlogsConfig) template.HTML {
 	var optionsCategory string
 	for _, item := range item.Menu {
-		slugifiedKey := slugify(item.Key)
+		slugifiedKey := clblog.Slugify(item.Key)
 		if slugifiedKey != "" && item.Value != "" {
 			optionsCategory += fmt.Sprintf("<option value=\"%s\">%s</option>", slugifiedKey, item.Value)
 		}
@@ -1334,7 +916,7 @@ func getOptionsCategory(item clconfig.BlogsConfig) template.HTML {
 func newPostPageHandler(c *gin.Context) {
 	session := sessions.Default(c)
 	username := session.Get("username")
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 	c.HTML(http.StatusOK, "admin_post_form", gin.H{
 		"blogId":          item.Id,
 		"title":           "Nouvel Article",
@@ -1364,7 +946,8 @@ func editPostPageHandler(c *gin.Context) {
 		return
 	}
 
-	var post Post
+	db := clblog.GetInstance().Db
+	var post clposts.Post
 	result := db.First(&post, uint(id))
 	if result.Error != nil {
 		c.HTML(http.StatusNotFound, "admin_post_form", gin.H{"title": "Article non trouvé"})
@@ -1373,7 +956,7 @@ func editPostPageHandler(c *gin.Context) {
 
 	session := sessions.Default(c)
 	username := session.Get("username")
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 	c.HTML(http.StatusOK, "admin_post_form", gin.H{
 		"blogId":          item.Id,
 		"title":           "Éditer Article",
@@ -1432,9 +1015,9 @@ func createPostHandler(c *gin.Context) {
 		}
 	}
 
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 
-	post := Post{
+	post := clposts.Post{
 		BlogID:    item.Id,
 		Title:     strings.TrimSpace(req.Title),
 		Content:   strings.TrimSpace(req.Content),
@@ -1442,7 +1025,7 @@ func createPostHandler(c *gin.Context) {
 		CreatedAt: dateTimestamp(strings.TrimSpace(req.CreatedAt)),
 		Author:    author,
 		TagsList:  req.Tags,
-		Category:  slugify(req.Category),
+		Category:  clblog.Slugify(req.Category),
 		Hide:      req.Hide,
 	}
 
@@ -1453,6 +1036,7 @@ func createPostHandler(c *gin.Context) {
 		return
 	}
 
+	db := clblog.GetInstance().Db
 	result := db.Create(&post)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur création article"})
@@ -1473,7 +1057,8 @@ func updatePostHandler(c *gin.Context) {
 		return
 	}
 
-	var post Post
+	db := clblog.GetInstance().Db
+	var post clposts.Post
 	result := db.First(&post, uint(id))
 	if result.Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Article non trouvé"})
@@ -1491,7 +1076,7 @@ func updatePostHandler(c *gin.Context) {
 	post.Content = strings.TrimSpace(req.Content)
 	post.Excerpt = strings.TrimSpace(req.Excerpt)
 	post.TagsList = req.Tags
-	post.Category = slugify(req.Category)
+	post.Category = clblog.Slugify(req.Category)
 	post.Hide = req.Hide
 	post.FillExcerpt()
 
@@ -1512,29 +1097,30 @@ func deletePostHandler(c *gin.Context) {
 		return
 	}
 
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 
 	// chercher les images du post
-	var post Post
+	var post clposts.Post
+	db := clblog.GetInstance().Db
 	result := db.Where("blog_id = ?", item.Id).First(&post, uint(id))
 	if result.Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Article non trouvé"})
 		return
 	}
-	imagesFound, images := ExtractImages(post.Content, false, true)
+	imagesFound, images := clposts.ExtractImages(post.Content, false, true)
 
 	// Supprimer dans une transaction commentaires puis l'article
 	tx := db.Begin()
 
 	// Supprimer les commentaires
-	if err := tx.Where("post_id = ?", uint(id)).Delete(&Comment{}).Error; err != nil {
+	if err := tx.Where("post_id = ?", uint(id)).Delete(&clposts.Comment{}).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur suppression commentaires"})
 		return
 	}
 
 	// Supprimer l'article
-	if err := tx.Delete(&Post{}, uint(id)).Error; err != nil {
+	if err := tx.Delete(&clposts.Post{}, uint(id)).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur suppression article"})
 		return
@@ -1561,136 +1147,6 @@ func deletePostHandler(c *gin.Context) {
 
 // ============= API HANDLERS =============
 
-// rssHandler génère le flux RSS des posts
-func getImageInfo(imagePath string) (size int64, mimeType string, err error) {
-	// Obtenir les informations du fichier
-	fileInfo, err := os.Stat(imagePath)
-	if err != nil {
-		return 0, "", err
-	}
-
-	// Taille du fichier
-	size = fileInfo.Size()
-
-	// Type MIME basé sur l'extension
-	ext := filepath.Ext(imagePath)
-	mimeType = mime.TypeByExtension(ext)
-
-	// Si le type MIME n'est pas trouvé, définir une valeur par défaut
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-
-	return size, mimeType, nil
-}
-
-func rssHandler(c *gin.Context) {
-	var posts []Post
-
-	item := getConfItem(c, false, 0)
-
-	// Récupérer les 20 derniers posts
-	query := db.Order("created_at desc").Limit(20)
-
-	category := c.Param("category")
-	if category != "" {
-		query = query.Where("blog_id = ? AND NOT hide AND category = ?", item.Id, slugify(category))
-	} else {
-		query = query.Where("blog_id = ? AND NOT hide", item.Id)
-	}
-
-	result := query.Find(&posts)
-	if result.Error != nil {
-		c.XML(http.StatusInternalServerError, gin.H{"error": "Erreur récupération posts"})
-		return
-	}
-
-	// Obtenir l'URL de base depuis la requête
-	scheme := "http"
-	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	baseURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
-
-	// Construire le flux RSS
-	rss := RSS{
-		Version: "2.0",
-		Channel: Channel{
-			Title:         item.SiteName,
-			Link:          baseURL,
-			Description:   stripmd.Strip(item.Description),
-			Language:      "fr-FR",
-			Generator:     fmt.Sprintf("Littleblog v%s", VERSION),
-			LastBuildDate: time.Now().Format(time.RFC1123Z),
-			Items:         make([]RSSItem, 0, len(posts)),
-		},
-	}
-
-	rss.Channel.Copyright = fmt.Sprintf("© %d %s", time.Now().Year(), item.SiteName)
-
-	// Convertir les posts en items RSS
-	for _, post := range posts {
-		// Préparer la description (excerpt ou début du contenu)
-		description := post.Excerpt
-		if description == "" {
-			// Prendre les 200 premiers caractères du contenu si pas d'excerpt
-			if len(post.Content) > 200 {
-				description = post.Content[:200] + "..."
-			} else {
-				description = post.Content
-			}
-		}
-
-		// Category, si aucune catégorie, on prend le 1er tag
-		category := ""
-		if post.Category != "" {
-			category = post.Category
-		} else if len(post.TagsList) > 0 {
-			category = post.TagsList[0] // RSS 2.0 ne supporte qu'une catégorie par item
-		}
-
-		item := RSSItem{
-			Title:       post.Title,
-			Link:        fmt.Sprintf("%s/post/%d", baseURL, post.ID),
-			Description: stripmd.Strip(description),
-			Author:      post.Author,
-			Category:    category,
-			GUID:        fmt.Sprintf("%s/post/%d", baseURL, post.ID),
-			PubDate:     post.CreatedAt.Format(time.RFC1123Z),
-			Enclosure:   nil,
-		}
-
-		// on génère l'image dans le rss si il y en a une de présente
-		if post.FirstImage != "" {
-			realpath := strings.Replace(post.FirstImage, "/static", configuration.StaticPath, 1)
-			size, mime, err := getImageInfo(realpath)
-			if err == nil {
-				item.Enclosure = &RSSEnclosure{
-					URL:    post.FirstImage,
-					Length: size,
-					Type:   mime,
-				}
-			}
-		}
-
-		rss.Channel.Items = append(rss.Channel.Items, item)
-	}
-
-	// Définir le content-type approprié
-	c.Header("Content-Type", "application/rss+xml; charset=utf-8")
-
-	output, err := xml.MarshalIndent(rss, "", "  ")
-	if err != nil {
-		c.XML(http.StatusInternalServerError, gin.H{"error": "Erreur génération RSS"})
-		return
-	}
-
-	// Ajouter le header XML au début
-	xmlWithHeader := []byte(xml.Header + string(output))
-
-	c.Data(http.StatusOK, "application/rss+xml; charset=utf-8", xmlWithHeader)
-}
-
 func getPostsAPI(c *gin.Context) {
 	// Récupération des paramètres de pagination
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -1706,14 +1162,15 @@ func getPostsAPI(c *gin.Context) {
 		limit = 50
 	}
 
-	category := slugify(c.DefaultQuery("category", ""))
+	category := clblog.Slugify(c.DefaultQuery("category", ""))
 
 	// Calcul de l'offset
 	offset := (page - 1) * limit
 
-	item := getConfItem(c, false, 0)
+	db := clblog.GetInstance().Db
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 	buildQuery := func() *gorm.DB {
-		query := db.Model(&Post{}).Where("blog_id = ? AND NOT hide", item.Id)
+		query := db.Model(&clposts.Post{}).Where("blog_id = ? AND NOT hide", item.Id)
 		if category != "" {
 			query = query.Where("category = ?", category)
 		}
@@ -1725,7 +1182,7 @@ func getPostsAPI(c *gin.Context) {
 	buildQuery().Count(&total)
 
 	// Récupérer les posts avec leurs commentaires
-	var posts []Post
+	var posts []clposts.Post
 	result := buildQuery().
 		Preload("Comments").
 		Order("created_at desc").
@@ -1743,7 +1200,7 @@ func getPostsAPI(c *gin.Context) {
 
 	// Convertir en Markdown le résumé
 	for i, post := range posts {
-		posts[i].Excerpt = string(convertMarkdownToHTML(post.Excerpt))
+		posts[i].Excerpt = string(clmarkdown.ConvertMarkdownToHTML(post.Excerpt))
 	}
 
 	// Envoyer la réponse structurée pour l'infinite scroll
@@ -1768,13 +1225,14 @@ func getPostAPI(c *gin.Context) {
 
 func deleteCommentAPI(c *gin.Context) {
 	idStr := c.Param("id")
+	db := clblog.GetInstance().Db
 	commentID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalide"})
 		return
 	}
 
-	if err := db.Where("id = ?", uint(commentID)).Delete(&Comment{}).Error; err != nil {
+	if err := db.Where("id = ?", uint(commentID)).Delete(&clposts.Comment{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur suppression commentaires"})
 		return
 	}
@@ -1790,7 +1248,8 @@ func getCommentsAPI(c *gin.Context) {
 		return
 	}
 
-	var comments []Comment
+	db := clblog.GetInstance().Db
+	var comments []clposts.Comment
 	result := db.Where("post_id = ?", uint(postID)).Order("created_at asc").Find(&comments)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur serveur"})
@@ -1800,14 +1259,15 @@ func getCommentsAPI(c *gin.Context) {
 	c.JSON(http.StatusOK, comments)
 }
 
-func getPost(c *gin.Context, idStr string) *Post {
+func getPost(c *gin.Context, idStr string) *clposts.Post {
 	postID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		return nil
 	}
 
-	var post Post
-	item := getConfItem(c, false, 0)
+	db := clblog.GetInstance().Db
+	var post clposts.Post
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 	result := db.Where("blog_id = ? AND NOT hide", item.Id).First(&post, uint(postID))
 	if result.Error != nil {
 		return nil
@@ -1828,20 +1288,22 @@ func addCommentAPI(c *gin.Context) {
 		return
 	}
 
+	lb := clblog.GetInstance()
+
 	// controle du captcha
-	err := captcha.VerifyCaptcha(req.CaptchaID, req.CaptchaAnswer)
+	err := lb.Captcha.VerifyCaptcha(req.CaptchaID, req.CaptchaAnswer)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	comment := Comment{
+	comment := clposts.Comment{
 		PostID:  post.ID,
 		Author:  strings.TrimSpace(req.Author),
 		Content: strings.TrimSpace(req.Content),
 	}
 
-	result := db.Create(&comment)
+	result := lb.Db.Create(&comment)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur création commentaire"})
 		return
@@ -1853,13 +1315,14 @@ func addCommentAPI(c *gin.Context) {
 func searchPostsAPI(c *gin.Context) {
 	query := strings.ToLower(strings.TrimSpace(c.Query("q")))
 	if query == "" {
-		c.JSON(http.StatusOK, []Post{})
+		c.JSON(http.StatusOK, []clposts.Post{})
 		return
 	}
 
-	var posts []Post
+	db := clblog.GetInstance().Db
+	var posts []clposts.Post
 
-	item := getConfItem(c, false, 0)
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 
 	searchTerm := "%" + query + "%"
 	result := db.Where(

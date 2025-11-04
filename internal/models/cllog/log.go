@@ -3,7 +3,7 @@ package cllog
 import (
 	"fmt"
 	"io"
-	"littleblog/internal/clconfig"
+	"littleblog/internal/models/clconfig"
 	"log/syslog"
 	"os"
 	"path/filepath"

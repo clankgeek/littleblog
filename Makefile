@@ -3,7 +3,7 @@ BINARY_NAME=littleblog
 BUILD_DIR=build
 BUILD_ID := $(shell date +%Y%m%d%H%M%S)
 VERSION=$(shell grep  "const VERSION string = " main.go | egrep "[0-9\.]+" -o)
-LDFLAGS=-ldflags "-X main.Version=${VERSION} -X main.BuildID=${BUILD_ID} -s -w"
+LDFLAGS=-ldflags "-X main.BuildID=${BUILD_ID} -s -w"
 PLATFORMS=linux/386 linux/amd64 linux/arm linux/arm64 darwin/amd64 darwin/arm64 windows/386 windows/amd64
 
 # Debian package variables
@@ -16,7 +16,7 @@ DEB_DIR=$(BUILD_DIR)/deb
 DEB_PKG_DIR=$(DEB_DIR)/$(PKG_NAME)_$(PKG_VERSION)
 
 # Go parameters
-GOCMD=CGO_ENABLED=1 go
+GOCMD=CGO_ENABLED=1 GOAMD64=v3 go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
@@ -81,21 +81,6 @@ coverage: test-unit
 	@echo "📊 Generating coverage report..."
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "✅ Coverage report: coverage.html"
-
-# Run comprehensive test suite
-test-suite:
-	@chmod +x test.sh
-	@./test.sh all
-
-# Run CI test pipeline
-test-ci:
-	@chmod +x test.sh
-	@./test.sh ci
-
-# Run security tests
-test-security:
-	@chmod +x test.sh
-	@./test.sh security
 
 # Run lint checks
 lint:

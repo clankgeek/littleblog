@@ -2,6 +2,7 @@
 build/
 tests/
 
+*.db
 *.test
 *.out
 coverage.out

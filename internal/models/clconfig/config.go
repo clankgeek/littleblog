@@ -6,19 +6,34 @@ import (
 	"log/syslog"
 	"os"
 
-	"github.com/goccy/go-yaml"
+	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	TrustedProxies  []string       `yaml:"trustedproxies"`
-	TrustedPlatform string         `yaml:"trustedplatform"`
-	Database        DatabaseConfig `yaml:"database"`
-	StaticPath      string         `yaml:"staticpath"`
-	User            UserConfig     `yaml:"user"`
-	Production      bool           `yaml:"production"`
-	Listen          ListenConfig   `yaml:"listen"`
-	Logger          LoggerConfig   `yaml:"logger"`
-	Blogs           []BlogsConfig  `yaml:"blogs"`
+	TrustedProxies  []string        `yaml:"trustedproxies"`
+	TrustedPlatform string          `yaml:"trustedplatform"`
+	Database        DatabaseConfig  `yaml:"database"`
+	StaticPath      string          `yaml:"staticpath"`
+	User            UserConfig      `yaml:"user"`
+	Production      bool            `yaml:"production"`
+	Listen          ListenConfig    `yaml:"listen"`
+	Logger          LoggerConfig    `yaml:"logger"`
+	Blogs           []BlogsConfig   `yaml:"blogs"`
+	Analytics       AnalyticsConfig `yaml:"analytics"`
+}
+
+type AnalyticsConfig struct {
+	Enabled bool        `yaml:"enabled"`
+	Db      string      `yaml:"db"`
+	Path    string      `yaml:"path"`
+	Dsn     string      `yaml:"dsn"`
+	Redis   RedisConfig `yaml:"redis"`
+}
+
+type RedisConfig struct {
+	Addr string `yaml:"addr"`
+	Db   int    `yaml:"db"`
 }
 
 type BlogsConfig struct {
@@ -75,11 +90,6 @@ type DatabaseConfig struct {
 	Dsn   string      `yaml:"dsn"`
 }
 
-type RedisConfig struct {
-	Addr string `yaml:"addr"`
-	Db   int    `yaml:"db"`
-}
-
 type MenuItem struct {
 	Key   string `yaml:"key"`
 	Value string `yaml:"value"`
@@ -92,6 +102,9 @@ func CreateExampleConfig(filename string) (string, error) {
 		Database: DatabaseConfig{
 			Db:   "sqlite",
 			Path: "./test.db",
+		},
+		Analytics: AnalyticsConfig{
+			Enabled: false,
 		},
 		User: UserConfig{
 			Login: "admin",
@@ -168,6 +181,7 @@ func ConvertConfig(yamlConfig *Config) *Config {
 		TrustedPlatform: yamlConfig.TrustedPlatform,
 		Logger:          yamlConfig.Logger,
 		Blogs:           yamlConfig.Blogs,
+		Analytics:       yamlConfig.Analytics,
 	}
 
 	return conf
@@ -219,4 +233,70 @@ func handleExampleCreation(filename string) error {
 	fmt.Printf("✅ Fichier exemple créé: %s", filename)
 	fmt.Println("⚠️  Admin_pass sera automatiquement hash en argon2 dans Admin_hash au premier lancement")
 	return nil
+}
+
+func DisplayConfiguration(config *Config, version string) {
+	logPrintf("Littleblog version %s", version)
+
+	logPrintf("Mode Production %v", config.Production)
+	logPrintf("Administrateur login %s", config.User.Login)
+
+	logPrintf("Database")
+	if config.Database.Db == "sqlite" {
+		logPrintf("  • Type sqlite")
+		logPrintf("  • Path %s", config.Database.Path)
+	}
+	if config.Database.Db == "mysql" {
+		logPrintf("  • Type mysql")
+		logPrintf("  • DSN %s", config.Database.Dsn)
+	}
+	if config.Database.Redis.Addr != "" {
+		logPrintf("  • Cache redis %s", config.Database.Redis.Addr)
+	}
+
+	if config.Analytics.Enabled {
+		logPrintf("  • Analytics activé")
+		if config.Analytics.Db == "sqlite" && config.Analytics.Path != "" {
+			logPrintf("  	• Sqlite path %s", config.Analytics.Path)
+		} else if config.Analytics.Db == "mysql" && config.Analytics.Dsn != "" {
+			logPrintf("  	• mysql dsn %s", config.Analytics.Dsn)
+		} else {
+			logPrintf("  	• La base est la même que la principale")
+		}
+		logPrintf("  	• Redis addr %s", config.Analytics.Redis.Addr)
+	} else {
+		logPrintf("  • Analytics désactivé")
+	}
+
+	// Logger
+	logPrintf("Logger en level %s", config.Logger.Level)
+	if config.Logger.File.Enable {
+		logPrintf("  Log en fichier activé")
+		logPrintf("  • Path %s", config.Logger.File.Path)
+		logPrintf("  • Max size %d", config.Logger.File.MaxSize)
+		logPrintf("  • Max age %d", config.Logger.File.MaxAge)
+		logPrintf("  • Max backup %d", config.Logger.File.MaxBackups)
+		logPrintf("  • Compression %v", config.Logger.File.Compress)
+	} else {
+		logPrintf("  Log en fichier désactivé")
+	}
+	if config.Logger.Syslog.Enable {
+		logPrintf("  Log en syslog activé")
+		logPrintf("  • Protocol %s", config.Logger.Syslog.Protocol)
+		logPrintf("  • Address %s", config.Logger.Syslog.Address)
+		logPrintf("  • Tag %s", config.Logger.Syslog.Tag)
+		logPrintf("  • Priority %v", config.Logger.Syslog.Priority)
+	} else {
+		logPrintf("  Log en syslog désactivé")
+	}
+
+	logPrintf("Liste des blogs")
+	for _, blog := range config.Blogs {
+		logPrintf("  • \"%s\" avec l'id %d et le hostname %s", blog.SiteName, blog.Id, blog.Hostname)
+	}
+}
+
+// Info logue avec printf
+func logPrintf(format string, a ...any) {
+	log.Info().Msg(fmt.Sprintf(format, a...))
 }

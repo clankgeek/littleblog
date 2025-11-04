@@ -3,7 +3,8 @@ package clmiddleware
 import (
 	"crypto/rand"
 	"fmt"
-	"littleblog/internal/clconfig"
+	"littleblog/internal/models/clblog"
+	"littleblog/internal/models/clconfig"
 	"strconv"
 	"strings"
 	"time"
@@ -19,25 +20,33 @@ import (
 	"github.com/ulule/limiter/v3/drivers/store/memory"
 )
 
-func InitMiddleware(r *gin.Engine, Blogs map[string]clconfig.BlogsConfig, production bool) {
+func InitMiddleware(r *gin.Engine, lb *clblog.Littleblog) *AnalyticsMiddleware {
 	// logger
 	r.Use(Logger())
 	r.Use(Recovery())
 
 	// get blog Id
-	r.Use(BlogId(Blogs))
+	r.Use(BlogId(lb.Blogs))
 
 	// use Compression, with gzip
 	r.Use(gzip.Gzip(gzip.BestSpeed))
 
 	// Configuration des sessions
-	r.Use(NewSession(production))
+	r.Use(NewSession(lb.Configuration.Production))
 
 	// Calculate time elapsed
 	r.Use(RenderTime())
 
 	// CORS
 	r.Use(CORS)
+
+	if lb.Configuration.Analytics.Enabled {
+		analyticsMiddleware := NewAnalyticsMiddleware(lb)
+		r.Use(analyticsMiddleware.Middleware())
+		return analyticsMiddleware
+	}
+
+	return &AnalyticsMiddleware{}
 }
 
 func CORS(c *gin.Context) {

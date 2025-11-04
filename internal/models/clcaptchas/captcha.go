@@ -2,13 +2,13 @@ package clcaptchas
 
 import (
 	"fmt"
-	"littleblog/internal/clredis"
+	"littleblog/internal/models/clredis"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
 	"github.com/mojocn/base64Captcha"
+	"github.com/redis/go-redis/v9"
 )
 
 type Captchas struct {
