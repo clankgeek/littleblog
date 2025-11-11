@@ -24,15 +24,24 @@
 <div class="container">
     <!-- Statistiques -->
     <div class="stats-grid">
+        <a href="/admin/posts">
+            <div class="stat-card">
+                <div class="stat-icon"><img src="/files/img/memo.svg" class="icon"></div>
+                <div class="stat-number">{{ .stats.TotalPosts }}</div>
+                <div class="stat-label">Articles publiés</div>
+            </div>
+        </a>
+        <a href="/admin/moderation">
+            <div class="stat-card">
+                <div class="stat-icon"><img src="/files/img/ballon.svg" class="icon"></div>
+                <div class="stat-number">{{ .stats.TotalCommentsNotApproved }}</div>
+                <div class="stat-label">A approuver</div>
+            </div>
+        </a>
         <div class="stat-card">
-            <div class="stat-icon"><img src="/files/img/memo.svg" class="icon"></div>
-            <div class="stat-number">{{ .stats.TotalPosts }}</div>
-            <div class="stat-label">Articles publiés</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon"><img src="/files/img/ballon.svg" class="icon"></div>
-            <div class="stat-number">{{ .stats.TotalComments }}</div>
-            <div class="stat-label">Commentaires</div>
+                <div class="stat-icon"><img src="/files/img/ballon.svg" class="icon"></div>
+                <div class="stat-number">{{ .stats.TotalComments }}</div>
+                <div class="stat-label">Total</div>
         </div>
         <div class="stat-card">
             <div class="stat-icon"><img src="/files/img/stats.svg" class="icon"></div>

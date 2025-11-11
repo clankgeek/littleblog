@@ -450,6 +450,17 @@ func setRoutes(r *gin.Engine, analytics bool, analyticsMiddleware *clmiddleware.
 			admin.GET("/realtime", analyticsHandler.GetRealtimeStats)
 			admin.GET("/analytics", adminAnalyticsHandler)
 		}
+
+		moderationHandler := clposts.NewModerationHandler(lb.Db)
+		admin.GET("/moderation", adminModerationPageHandler)
+		moderation := admin.Group("/api/moderation")
+		{
+			moderation.GET("/comments", moderationHandler.GetPendingComments)
+			moderation.POST("/comments/:id/approve", moderationHandler.ApproveComment)
+			moderation.DELETE("/comments/:id", moderationHandler.DeleteComment)
+			moderation.POST("/comments/bulk-approve", moderationHandler.BulkApprove)
+			moderation.POST("/comments/bulk-delete", moderationHandler.BulkDelete)
+		}
 	}
 
 	// API publiques
@@ -459,7 +470,6 @@ func setRoutes(r *gin.Engine, analytics bool, analyticsMiddleware *clmiddleware.
 		api.GET("/posts/:id", getPostAPI)
 		api.GET("/posts/:id/comments", getCommentsAPI)
 		api.POST("/posts/:id/comments", addCommentAPI)
-		api.DELETE("/comments/:id", authRequired(), deleteCommentAPI)
 		api.GET("/search", searchPostsAPI)
 	}
 
@@ -542,12 +552,22 @@ func indexHandler(c *gin.Context) {
 	isAdmin := session.Get("user_id") != nil
 	category := clblog.Slugify(c.Param("category"))
 	memories := ""
+	approved := ""
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 
 	if isAdmin {
 		memories = getMemUsage()
+
+		var total int64
+		clblog.GetInstance().Db.Model(&clposts.Comment{}).
+			Joins("JOIN posts ON posts.id = comments.post_id").
+			Where("posts.blog_id = ? AND NOT comments.approved", item.Id).
+			Count(&total)
+		if total > 0 {
+			approved = fmt.Sprintf("⚠️ Il y a %d commentaires à approuver", total)
+		}
 	}
 
-	item := clblog.GetInstance().GetConfItem(c, false, 0)
 	c.HTML(http.StatusOK, "index", gin.H{
 		"blogId":          item.Id,
 		"title":           item.SiteName,
@@ -565,6 +585,7 @@ func indexHandler(c *gin.Context) {
 		"rsslink":         item.LinkRSS,
 		"BuildID":         BuildID,
 		"memories":        memories,
+		"approved":        approved,
 		"renderTime":      clmiddleware.GetRenderTime(c),
 	})
 }
@@ -689,6 +710,32 @@ func logoutHandler(c *gin.Context) {
 
 // ============= HANDLERS D'ADMINISTRATION =============
 
+// Page de modération (HTML)
+func adminModerationPageHandler(c *gin.Context) {
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
+
+	session := sessions.Default(c)
+	username := session.Get("username")
+
+	c.HTML(http.StatusOK, "admin_moderation", gin.H{
+		"blogId":      item.Id,
+		"title":       "Commentaires Admin",
+		"siteName":    item.SiteName,
+		"logo":        item.Logo,
+		"icone":       item.Favicon,
+		"pageTitle":   "Modération",
+		"pageIcon":    "📊",
+		"currentPage": "Modération",
+		"username":    username,
+		"currentYear": time.Now().Year(),
+		"isAdmin":     true,
+		"version":     clblog.GetInstance().Version,
+		"BuildID":     clblog.GetInstance().BuildID,
+		"memories":    getMemUsage(),
+		"renderTime":  clmiddleware.GetRenderTime(c),
+	})
+}
+
 func adminAnalyticsHandler(c *gin.Context) {
 	item := clblog.GetInstance().GetConfItem(c, false, 0)
 
@@ -719,9 +766,10 @@ func adminDashboardHandler(c *gin.Context) {
 	db := clblog.GetInstance().Db
 
 	var stats struct {
-		TotalPosts    int64
-		TotalComments int64
-		RecentPosts   []clposts.Post
+		TotalPosts               int64
+		TotalComments            int64
+		TotalCommentsNotApproved int64
+		RecentPosts              []clposts.Post
 	}
 
 	db.Model(&clposts.Post{}).Where("blog_id = ?", item.Id).Count(&stats.TotalPosts)
@@ -729,6 +777,10 @@ func adminDashboardHandler(c *gin.Context) {
 		Joins("JOIN posts ON posts.id = comments.post_id").
 		Where("posts.blog_id = ?", item.Id).
 		Count(&stats.TotalComments)
+	db.Model(&clposts.Comment{}).
+		Joins("JOIN posts ON posts.id = comments.post_id").
+		Where("posts.blog_id = ? AND NOT comments.approved", item.Id).
+		Count(&stats.TotalCommentsNotApproved)
 
 	db.Where("blog_id = ?", item.Id).Order("created_at desc").Limit(5).Find(&stats.RecentPosts)
 
@@ -1223,23 +1275,6 @@ func getPostAPI(c *gin.Context) {
 	c.JSON(http.StatusOK, &post)
 }
 
-func deleteCommentAPI(c *gin.Context) {
-	idStr := c.Param("id")
-	db := clblog.GetInstance().Db
-	commentID, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalide"})
-		return
-	}
-
-	if err := db.Where("id = ?", uint(commentID)).Delete(&clposts.Comment{}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur suppression commentaires"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Commentaire supprimé avec succès"})
-}
-
 func getCommentsAPI(c *gin.Context) {
 	idStr := c.Param("id")
 	postID, err := strconv.ParseUint(idStr, 10, 32)
@@ -1250,7 +1285,7 @@ func getCommentsAPI(c *gin.Context) {
 
 	db := clblog.GetInstance().Db
 	var comments []clposts.Comment
-	result := db.Where("post_id = ?", uint(postID)).Order("created_at asc").Find(&comments)
+	result := db.Where("post_id = ? AND approved", uint(postID)).Order("created_at asc").Find(&comments)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur serveur"})
 		return

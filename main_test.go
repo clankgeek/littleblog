@@ -678,8 +678,8 @@ func TestGetCommentsAPI(t *testing.T) {
 	post := createTestPost(testDB)
 
 	// Créer des commentaires
-	testDB.Create(&clposts.Comment{PostID: post.ID, Author: "User1", Content: "Comment 1"})
-	testDB.Create(&clposts.Comment{PostID: post.ID, Author: "User2", Content: "Comment 2"})
+	testDB.Create(&clposts.Comment{PostID: post.ID, Author: "User1", Content: "Comment 1", Approved: true})
+	testDB.Create(&clposts.Comment{PostID: post.ID, Author: "User2", Content: "Comment 2", Approved: true})
 
 	r.GET("/api/posts/:id/comments", getCommentsAPI)
 

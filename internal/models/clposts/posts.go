@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Models avec tags GORM
 type Post struct {
 	ID          uint          `json:"id" gorm:"primaryKey"`
 	BlogID      uint          `json:"blog_id" gorm:"index:idx_blog_hide"`
@@ -28,16 +27,6 @@ type Post struct {
 	TagsList    []string      `json:"tags" gorm:"-"`
 	Comments    []Comment     `json:"comments,omitempty" gorm:"foreignKey:PostID"`
 	Hide        bool          `json:"hide" gorm:"type:bool;index:idx_blog_hide"`
-}
-
-type Comment struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	PostID    uint      `json:"post_id" gorm:"not null;index"`
-	Author    string    `json:"author" gorm:"not null"`
-	Content   string    `json:"content" gorm:"type:text;not null"`
-	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
-	Post      Post      `json:"-" gorm:"foreignKey:PostID"`
 }
 
 // Remplir Excerpt calculé a partir de content

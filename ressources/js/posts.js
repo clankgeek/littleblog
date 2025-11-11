@@ -20,11 +20,8 @@ document.addEventListener('alpine:init', () => {
 
         async deleteComment(commentId) {
             try {
-                const response = await fetch(`/api/comments/${commentId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
+                const response = await fetch(`/admin/api/moderation/comments/${commentId}`, {
+                    method: 'DELETE'
                 });
 
                 if (response.ok) {

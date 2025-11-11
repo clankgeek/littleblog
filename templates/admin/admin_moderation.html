@@ -1,0 +1,243 @@
+{{ define "admin_moderation" }}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    {{ template "head" . }}
+    <link rel="stylesheet" href="/files/theme.css/{{ .blogId }}?buildId{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/admin_header.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/admin_moderation.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/common.css?{{ .BuildID }}">
+    <link rel="stylesheet" href="/files/css/footer.css?{{ .BuildID }}">
+</head>
+<body>
+    {{ template "admin_header" . }}
+    <main class="main">
+        {{ template "admin_moderation_content" . }}
+    </main>
+    {{ template "footer" . }}
+    <script src="/files/js/common.js?{{ .BuildID }}"></script>
+    {{ template "admin_moderation_scripts" . }}
+</body>
+</html>
+{{ end }}
+{{ define "admin_moderation_content" }}
+    <div class="container" x-data="moderationApp()" x-init="init()">
+        <h1>Modération des commentaires</h1>
+
+        <!-- Filtres -->
+        <div class="filters">
+            <select x-model="status" @change="loadComments()">
+                <option value="pending">En attente</option>
+                <option value="approved">Approuvés</option>
+                <option value="all">Tous</option>
+            </select>
+
+            <span x-show="total > 0" x-text="`${total} commentaire(s)`" style="color: #6b7280;"></span>
+
+            <button @click="loadComments()" class="btn">Actualiser</button>
+        </div>
+
+        <!-- Actions groupées -->
+        <div class="bulk-actions" x-show="selectedIds.length > 0">
+            <span x-text="`${selectedIds.length} sélectionné(s)`" style="font-weight: 600;"></span>
+            <button @click="bulkApprove()" class="btn-approve">Approuver la sélection</button>
+            <button @click="bulkDelete()" class="btn-delete">Supprimer la sélection</button>
+            <button @click="selectedIds = []" class="btn">Désélectionner</button>
+        </div>
+
+        <!-- Messages d'erreur -->
+        <div x-show="error" class="error" x-text="error"></div>
+
+        <!-- Liste des commentaires -->
+        <div x-show="loading" class="loading">Chargement...</div>
+
+        <div x-show="!loading && comments.length === 0" class="empty">
+            Aucun commentaire à afficher
+        </div>
+
+        <div x-show="!loading && comments.length > 0" class="comment-list">
+            <template x-for="comment in comments" :key="comment.id">
+                <div class="comment-card" :class="{ 'selected': selectedIds.includes(comment.id) }">
+                    <div class="comment-header">
+                        <div style="display: flex; gap: 15px; align-items: start;">
+                            <input type="checkbox" :value="comment.id" :checked="selectedIds.includes(comment.id)"
+                                @change="toggleSelect(comment.id)">
+                            <div class="comment-meta">
+                                <div class="comment-author" x-text="comment.author"></div>
+                                <div class="comment-date" x-text="formatDate(comment.created_at)"></div>
+                                <div class="comment-post" x-show="comment.post">
+                                    📝 <span x-text="comment.post?.title"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="status-badge" :class="comment.approved ? 'status-approved' : 'status-pending'"
+                            x-text="comment.approved ? 'Approuvé' : 'En attente'"></span>
+                    </div>
+
+                    <div class="comment-content" x-text="comment.content"></div>
+
+                    <div class="comment-actions">
+                        <button @click="approveComment(comment.id)" class="btn-approve" x-show="!comment.approved">
+                            ✓ Approuver
+                        </button>
+                        <button @click="deleteComment(comment.id)" class="btn-delete">
+                            ✕ Supprimer
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div><!--  -->
+
+        <!-- Pagination -->
+        <div x-show="totalPages > 1" class="pagination">
+            <button @click="prevPage()" :disabled="page <= 1">← Précédent</button>
+            <span x-text="`Page ${page} sur ${totalPages}`"></span>
+            <button @click="nextPage()" :disabled="page >= totalPages">Suivant →</button>
+        </div>
+    </div>
+{{ end }}
+{{ define "admin_moderation_scripts" }}
+    <script>
+        function moderationApp() {
+            return {
+                comments: [],
+                selectedIds: [],
+                status: 'pending',
+                page: 1,
+                limit: 20,
+                total: 0,
+                loading: false,
+                error: null,
+
+                get totalPages() {
+                    return Math.ceil(this.total / this.limit);
+                },
+
+                async loadComments() {
+                    this.loading = true;
+                    this.error = null;
+
+                    try {
+                        const response = await fetch(`/admin/api/moderation/comments?status=${this.status}&page=${this.page}&limit=${this.limit}`);
+                        const data = await response.json();
+
+                        if (!response.ok) throw new Error(data.error || 'Erreur de chargement');
+
+                        this.comments = data.comments || [];
+                        this.total = data.total || 0;
+                    } catch (err) {
+                        this.error = err.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async approveComment(id) {
+                    try {
+                        const response = await fetch(`/admin/api/moderation/comments/${id}/approve`, {
+                            method: 'POST'
+                        });
+                        const data = await response.json();
+
+                        if (!response.ok) throw new Error(data.error);
+
+                        await this.loadComments();
+                    } catch (err) {
+                        this.error = err.message;
+                    }
+                },
+
+                async deleteComment(id) {
+                    try {
+                        const response = await fetch(`/admin/api/moderation/comments/${id}`, {
+                            method: 'DELETE'
+                        });
+                        const data = await response.json();
+
+                        if (!response.ok) throw new Error(data.error);
+
+                        await this.loadComments();
+                    } catch (err) {
+                        this.error = err.message;
+                    }
+                },
+
+                async bulkApprove() {
+                    if (this.selectedIds.length === 0) return;
+                    try {
+                        const response = await fetch('/admin/api/moderation/comments/bulk-approve', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ids: this.selectedIds })
+                        });
+                        const data = await response.json();
+
+                        if (!response.ok) throw new Error(data.error);
+
+                        this.selectedIds = [];
+                        await this.loadComments();
+                    } catch (err) {
+                        this.error = err.message;
+                    }
+                },
+
+                async bulkDelete() {
+                    if (this.selectedIds.length === 0) return;
+                    try {
+                        const response = await fetch('/admin/api/moderation/comments/bulk-delete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ids: this.selectedIds })
+                        });
+                        const data = await response.json();
+
+                        if (!response.ok) throw new Error(data.error);
+
+                        this.selectedIds = [];
+                        await this.loadComments();
+                    } catch (err) {
+                        this.error = err.message;
+                    }
+                },
+
+                toggleSelect(id) {
+                    const index = this.selectedIds.indexOf(id);
+                    if (index > -1) {
+                        this.selectedIds.splice(index, 1);
+                    } else {
+                        this.selectedIds.push(id);
+                    }
+                },
+
+                formatDate(dateString) {
+                    const date = new Date(dateString);
+                    return date.toLocaleDateString('fr-FR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                },
+
+                prevPage() {
+                    if (this.page > 1) {
+                        this.page--;
+                        this.loadComments();
+                    }
+                },
+
+                nextPage() {
+                    if (this.page < this.totalPages) {
+                        this.page++;
+                        this.loadComments();
+                    }
+                },
+
+                init() {
+                    this.loadComments();
+                }
+            }
+        }
+    </script>
+{{ end }}

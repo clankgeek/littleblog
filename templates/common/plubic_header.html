@@ -35,7 +35,12 @@
         <div class="nav-links">
             {{ .menu }}
         </div>
+        {{ if .isAuthenticated }}
         <span class="username">{{ .memories }}</span>
+        <a href="/admin/moderation">
+            <br><span class="username">{{ .approved }}</span>
+        </a>
+        {{ end }}
     </div>
 </div>
 {{ end }}
