@@ -405,6 +405,13 @@ func setRoutes(r *gin.Engine, analytics bool, analyticsMiddleware *clmiddleware.
 
 	// Route statiques
 	r.Static("/static/", lb.Configuration.StaticPath)
+
+	r.GET("/robot.txt", func(c *gin.Context) {
+		c.Header("Content-Type", "text/plain")
+		c.String(200, `User-agent: *
+Allow: /`)
+	})
+
 	r.GET("/files/css/*.css", ServeMinifiedStatic(m))
 	r.GET("/files/js/*.js", ServeMinifiedStatic(m))
 	r.GET("/files/img/*.svg", ServeMinifiedStatic(m))
@@ -551,6 +558,7 @@ func indexHandler(c *gin.Context) {
 	session := sessions.Default(c)
 	isAdmin := session.Get("user_id") != nil
 	category := clblog.Slugify(c.Param("category"))
+
 	memories := ""
 	approved := ""
 	item := clblog.GetInstance().GetConfItem(c, false, 0)
