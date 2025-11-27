@@ -32,7 +32,7 @@ type Stats30Days struct {
 	AvgPageViewsPerVisitor float64        `json:"avg_page_views_per_visitor"`
 	TopPages               []PageStat     `json:"top_pages"`
 	TopReferrers           []ReferrerStat `json:"top_referrers"`
-	TopLanguages           []LanguageStat `json:"top_languages"`
+	TopCountries           []CountryStat  `json:"top_countries"`
 	DailyStats             []DailyStat    `json:"daily_stats"`
 }
 
@@ -46,9 +46,9 @@ type ReferrerStat struct {
 	Count    int64  `json:"count"`
 }
 
-type LanguageStat struct {
-	Language string `json:"language"`
-	Count    int64  `json:"count"`
+type CountryStat struct {
+	Country string `json:"country"`
+	Count   int64  `json:"count"`
 }
 
 type DailyStat struct {
@@ -118,18 +118,18 @@ func (as *AnalyticsService) GetStats30Days(blogid uint) (*Stats30Days, error) {
 	stats.TopReferrers = topReferrers
 
 	// 6. Top des langues
-	var topLanguages []LanguageStat
+	var topCountries []CountryStat
 	err = as.db.Model(&PageView{}).
-		Select("language, COUNT(*) as count").
+		Select("country, COUNT(*) as count").
 		Where("created_at >= ? AND blog_id = ?", thirtyDaysAgo, blogid).
-		Group("language").
+		Group("country").
 		Order("count DESC").
 		Limit(10).
-		Scan(&topLanguages).Error
+		Scan(&topCountries).Error
 	if err != nil {
 		return nil, fmt.Errorf("error getting top languages: %w", err)
 	}
-	stats.TopLanguages = topLanguages
+	stats.TopCountries = topCountries
 
 	// 7. Statistiques journalières (30 derniers jours)
 	dailyStats, err := as.getDailyStats(thirtyDaysAgo, blogid)

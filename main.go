@@ -532,6 +532,8 @@ func main() {
 	analyticsMiddleware := clmiddleware.InitMiddleware(r, blog)
 	setRoutes(r, configuration.Analytics.Enabled, analyticsMiddleware)
 
+	defer analyticsMiddleware.Close()
+
 	startServer(r)
 }
 

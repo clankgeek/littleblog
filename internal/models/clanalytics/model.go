@@ -10,7 +10,7 @@ type PageView struct {
 	PagePath  string    `gorm:"index;not null" json:"page_path"`
 	Referrer  string    `json:"referrer"`
 	UserAgent string    `json:"user_agent"`
-	Language  string    `gorm:"index" json:"language"`
+	Country   string    `gorm:"index" json:"country"`
 	IPAddress string    `json:"ip_address"`
 	CreatedAt time.Time `gorm:"index" json:"created_at"`
 }

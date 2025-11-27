@@ -1,18 +1,18 @@
 package clmiddleware
 
 import (
-	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"littleblog/internal/models/clanalytics"
 	"littleblog/internal/models/clblog"
 	"littleblog/internal/models/gormzerologger"
+	"net/netip"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/oschwald/geoip2-golang/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 	"gorm.io/driver/mysql"
@@ -23,6 +23,7 @@ import (
 type AnalyticsMiddleware struct {
 	Db    *gorm.DB
 	Redis *redis.Client
+	GeoDB *geoip2.Reader
 }
 
 func NewAnalyticsMiddleware(lb *clblog.Littleblog) *AnalyticsMiddleware {
@@ -57,12 +58,30 @@ func NewAnalyticsMiddleware(lb *clblog.Littleblog) *AnalyticsMiddleware {
 		log.Fatal().Err(err)
 	}
 
+	var geodb *geoip2.Reader
+	if config.Analytics.GeoIpPath != "" {
+		geodb, err = geoip2.Open(config.Analytics.GeoIpPath)
+		if err != nil {
+			log.Fatal().Err(err)
+		}
+	}
+
 	return &AnalyticsMiddleware{
 		Db: db,
 		Redis: redis.NewClient(&redis.Options{
 			Addr: config.Analytics.Redis.Addr,
 			DB:   config.Analytics.Redis.Db,
 		}),
+		GeoDB: geodb,
+	}
+}
+
+func (am *AnalyticsMiddleware) Close() {
+	if am.GeoDB != nil {
+		err := am.GeoDB.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("Error closing GeoIP database")
+		}
 	}
 }
 
@@ -78,43 +97,31 @@ func (am *AnalyticsMiddleware) Middleware() gin.HandlerFunc {
 			return
 		}
 
+		referrer := c.Request.Referer()
+		userAgent := c.Request.UserAgent()
+		ipAddress := am.getClientIP(c)
+		country := am.getCountry(c, ipAddress)
+
 		var visitorID string
 
 		// Essayer de récupérer le cookie
 		visitorID, err := c.Cookie("_visitor_id")
 
 		if err != nil || visitorID == "" {
-			// Pas de cookie disponible : générer un nouvel ID aléatoire
-			randomBytes := make([]byte, 16)
-			rand.Read(randomBytes)
-			visitorID = hex.EncodeToString(randomBytes)
+			// Pas de cookie disponible : générer un nouvel ID
+			hash := sha256.Sum256([]byte(fmt.Sprintf("%s%s%s", ipAddress, country, userAgent)))
+			visitorID = hex.EncodeToString(hash[:])[:32]
 
 			// Essayer de définir le cookie (peut échouer si désactivés)
 			c.SetCookie(
 				"_visitor_id",
 				visitorID,
-				365*24*60*60*2, // 2 ans
+				365*24*60*60, // 1an
 				"/",
 				"",
 				clblog.GetInstance().Configuration.Production, // secure (true si HTTPS)
 				true, // httpOnly
 			)
-		}
-
-		// Fallback : si les cookies sont désactivés, utiliser un hash
-		// basé sur IP + User-Agent + Language pour avoir une certaine cohérence
-		referrer := c.Request.Referer()
-		userAgent := c.Request.UserAgent()
-		language := am.extractLanguage(c)
-		ipAddress := am.getClientIP(c)
-
-		// Si le visitorID semble être celui qu'on vient de créer mais que
-		// les cookies sont désactivés, on utilise le hash pour la cohérence
-		// entre les requêtes de la même session
-		if err != nil {
-			// Générer un ID basé sur IP + lang + User-Agent comme fallback
-			hash := sha256.Sum256([]byte(fmt.Sprintf("%s%s%s", ipAddress, language, userAgent)))
-			visitorID = hex.EncodeToString(hash[:])[:32]
 		}
 
 		item := clblog.GetInstance().GetConfItem(c, false, 0)
@@ -126,7 +133,7 @@ func (am *AnalyticsMiddleware) Middleware() gin.HandlerFunc {
 		}
 
 		// Enregistrer de manière asynchrone pour ne pas bloquer la requête
-		go am.recordPageView(item.Id, visitorID, pagePath, referrer, userAgent, language, ipAddress)
+		go am.recordPageView(item.Id, visitorID, pagePath, referrer, userAgent, country, ipAddress)
 
 		c.Next()
 	}
@@ -134,43 +141,96 @@ func (am *AnalyticsMiddleware) Middleware() gin.HandlerFunc {
 
 // getClientIP récupère l'IP réelle du client
 func (am *AnalyticsMiddleware) getClientIP(c *gin.Context) string {
-	// Vérifier les headers de proxy
-	ip := c.GetHeader("X-Real-IP")
-	if ip == "" {
-		ip = c.GetHeader("X-Forwarded-For")
-		if ip != "" {
-			// Prendre la première IP si plusieurs
-			ips := strings.Split(ip, ",")
-			ip = strings.TrimSpace(ips[0])
+	// 1. Cloudflare
+	if ip := c.GetHeader("CF-Connecting-IP"); ip != "" {
+		return ip
+	}
+
+	// 2. Cloudflare Enterprise / Akamai
+	if ip := c.GetHeader("True-Client-IP"); ip != "" {
+		return ip
+	}
+
+	// 3. X-Real-IP (Nginx, load balancers)
+	if ip := c.GetHeader("X-Real-IP"); ip != "" {
+		return ip
+	}
+
+	// 4. X-Forwarded-For
+	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
 		}
+		return strings.TrimSpace(xff)
 	}
-	if ip == "" {
-		ip = c.ClientIP()
-	}
-	return ip
+
+	// 5. Fallback Gin (utilise RemoteAddr intelligemment)
+	return c.ClientIP()
 }
 
-// extractLanguage extrait la langue préférée du visiteur
-func (am *AnalyticsMiddleware) extractLanguage(c *gin.Context) string {
+func (am *AnalyticsMiddleware) extractCountryFromLanguage(c *gin.Context) string {
 	acceptLang := c.GetHeader("Accept-Language")
 	if acceptLang == "" {
-		return "unknown"
+		return ""
 	}
 
-	// Extraire la première langue (ex: "fr-FR,fr;q=0.9,en-US;q=0.8" -> "fr")
+	// Parcourir toutes les langues pour trouver un code pays
 	parts := strings.Split(acceptLang, ",")
-	if len(parts) > 0 {
-		lang := strings.Split(parts[0], ";")[0]
-		lang = strings.Split(lang, "-")[0]
-		return strings.ToLower(strings.TrimSpace(lang))
+	for _, part := range parts {
+		lang := strings.Split(part, ";")[0]
+		lang = strings.TrimSpace(lang)
+
+		// Si format "xx-YY", extraire YY
+		if idx := strings.Index(lang, "-"); idx != -1 {
+			return strings.ToUpper(lang[idx+1:])
+		}
 	}
 
-	return "unknown"
+	return ""
+}
+
+func (am *AnalyticsMiddleware) getCountry(c *gin.Context, ipAddress string) string {
+	// 1. Essayer d'abord avec GeoIP (plus fiable)
+	if country := am.getCountryFromIP(c, ipAddress); country != "" {
+		return country
+	}
+
+	// 2. Fallback sur Accept-Language
+	if country := am.extractCountryFromLanguage(c); country != "" {
+		return country
+	}
+
+	return "Unknown"
+}
+
+func (am *AnalyticsMiddleware) getCountryFromIP(ctx *gin.Context, ip string) string {
+	if am.GeoDB == nil || ip == "" {
+		return ""
+	}
+
+	parsedIP, err := netip.ParseAddr(ip)
+	if err != nil {
+		return ""
+	}
+
+	ipKey := fmt.Sprintf("analytics:ip:%s", parsedIP)
+	country := am.Redis.Get(ctx, ipKey).Val()
+	if country != "" {
+		return country
+	}
+
+	record, err := am.GeoDB.Country(parsedIP)
+	if err != nil {
+		return ""
+	}
+
+	am.Redis.Set(ctx, ipKey, record.Country.ISOCode, 1*time.Hour)
+
+	return record.Country.ISOCode
 }
 
 // recordPageView enregistre la vue de page dans la DB et met à jour Redis
-func (am *AnalyticsMiddleware) recordPageView(blogid uint, visitorID, pagePath, referrer, userAgent, language, ipAddress string) {
-	ctx := context.Background()
+func (am *AnalyticsMiddleware) recordPageView(blogid uint, visitorID, pagePath, referrer, userAgent, country, ipAddress string) {
 	now := time.Now()
 
 	// 1. Enregistrer dans SQLite via GORM
@@ -180,14 +240,14 @@ func (am *AnalyticsMiddleware) recordPageView(blogid uint, visitorID, pagePath, 
 		PagePath:  pagePath,
 		Referrer:  referrer,
 		UserAgent: userAgent,
-		Language:  language,
+		Country:   country,
 		IPAddress: ipAddress,
 		CreatedAt: now,
 	}
 
 	if err := am.Db.Create(&pageView).Error; err != nil {
 		// Log l'erreur mais ne pas faire échouer la requête
-		fmt.Printf("Error recording page view: %v\n", err)
+		log.Error().Err(err).Str("visitor", visitorID).Msg("Error recording page view")
 		return
 	}
 
@@ -212,15 +272,4 @@ func (am *AnalyticsMiddleware) recordPageView(blogid uint, visitorID, pagePath, 
 			"page_views_count": gorm.Expr("page_views_count + 1"),
 		})
 	}
-
-	// 3. Mettre à jour les compteurs Redis pour un accès rapide
-	// Utiliser un cache de 30 jours
-	cacheKey := fmt.Sprintf("analytics:daily:%d:%s", blogid, now.Format("2006-01-02"))
-	am.Redis.HIncrBy(ctx, cacheKey, "page_views", 1)
-	am.Redis.Expire(ctx, cacheKey, 31*24*time.Hour)
-
-	// Marquer le visiteur comme vu aujourd'hui
-	visitorKey := fmt.Sprintf("analytics:visitors:%d:%s", blogid, now.Format("2006-01-02"))
-	am.Redis.SAdd(ctx, visitorKey, visitorID)
-	am.Redis.Expire(ctx, visitorKey, 31*24*time.Hour)
 }

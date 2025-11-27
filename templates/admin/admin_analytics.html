@@ -1,6 +1,7 @@
 {{ define "admin_analytics" }}
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     {{ template "head" . }}
     <link rel="stylesheet" href="/files/theme.css/{{ .blogId }}?buildId{{ .BuildID }}">
@@ -9,6 +10,7 @@
     <link rel="stylesheet" href="/files/css/common.css?{{ .BuildID }}">
     <link rel="stylesheet" href="/files/css/footer.css?{{ .BuildID }}">
 </head>
+
 <body>
     {{ template "admin_header" . }}
     <main class="main">
@@ -19,189 +21,189 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
     {{ template "admin_analytics_scripts" . }}
 </body>
+
 </html>
 {{ end }}
 {{ define "admin_analytics_content" }}
-    <div class="container" x-data="analyticsApp()" x-init="init()">
-        <h1>📊 Statistiques des 30 derniers jours</h1>
+<div class="container" x-data="analyticsApp()" x-init="init()">
+    <h1>📊 Statistiques des 30 derniers jours</h1>
 
-        <!-- Loading state -->
-        <div x-show="loading" class="loading">
-            <p>Chargement des statistiques...</p>
+    <!-- Loading state -->
+    <div x-show="loading" class="loading">
+        <p>Chargement des statistiques...</p>
+    </div>
+
+    <!-- Error state -->
+    <div x-show="error" class="error" x-text="error"></div>
+
+    <!-- Stats Cards -->
+    <div x-show="!loading && !error" class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Pages vues</div>
+            <div class="stat-value" x-text="formatNumber(stats.total_page_views)"></div>
         </div>
 
-        <!-- Error state -->
-        <div x-show="error" class="error" x-text="error"></div>
-
-        <!-- Stats Cards -->
-        <div x-show="!loading && !error" class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Pages vues</div>
-                <div class="stat-value" x-text="formatNumber(stats.total_page_views)"></div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-label">Visiteurs uniques</div>
-                <div class="stat-value" x-text="formatNumber(stats.unique_visitors)"></div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-label">Pages/Visiteur</div>
-                <div class="stat-value" x-text="stats.avg_page_views_per_visitor ? stats.avg_page_views_per_visitor.toFixed(2) : '0'"></div>
-            </div>
+        <div class="stat-card">
+            <div class="stat-label">Visiteurs uniques</div>
+            <div class="stat-value" x-text="formatNumber(stats.unique_visitors)"></div>
         </div>
 
-        <!-- Daily Chart -->
-        <div x-show="!loading && !error" class="chart-container">
-            <div class="chart-title">Évolution journalière</div>
-            <canvas id="dailyChart"></canvas>
-        </div>
-
-        <!-- Top Lists Grid -->
-        <div x-show="!loading && !error" class="grid-2">
-            <!-- Top Pages -->
-            <div class="top-list">
-                <h3>🔝 Top Pages</h3>
-                <template x-for="(page, index) in stats.top_pages" :key="index">
-                    <div class="list-item">
-                        <span class="list-label" x-text="page.path"></span>
-                        <span class="list-value" x-text="formatNumber(page.views) + ' vues'"></span>
-                    </div>
-                </template>
-            </div>
-
-            <!-- Top Referrers -->
-            <div class="top-list">
-                <h3>🔗 Top Referrers</h3>
-                <template x-for="(ref, index) in stats.top_referrers" :key="index">
-                    <div class="list-item">
-                        <span class="list-label" x-text="ref.referrer || 'Direct'"></span>
-                        <span class="list-value" x-text="formatNumber(ref.count)"></span>
-                    </div>
-                </template>
-            </div>
-
-            <!-- Top Languages -->
-            <div class="top-list">
-                <h3>🌍 Top Langues</h3>
-                <template x-for="(lang, index) in stats.top_languages" :key="index">
-                    <div class="list-item">
-                        <span class="list-label" x-text="lang.language.toUpperCase()"></span>
-                        <span class="list-value" x-text="formatNumber(lang.count)"></span>
-                    </div>
-                </template>
-            </div>
+        <div class="stat-card">
+            <div class="stat-label">Pages/Visiteur</div>
+            <div class="stat-value"
+                x-text="stats.avg_page_views_per_visitor ? stats.avg_page_views_per_visitor.toFixed(2) : '0'"></div>
         </div>
     </div>
+
+    <!-- Daily Chart -->
+    <div x-show="!loading && !error" class="chart-container">
+        <div class="chart-title">Évolution journalière</div>
+        <canvas id="dailyChart"></canvas>
+    </div>
+
+    <!-- Top Lists Grid -->
+    <div x-show="!loading && !error" class="grid-2">
+        <!-- Top Pages -->
+        <div class="top-list">
+            <h3>🔝 Top Pages</h3>
+            <template x-for="(page, index) in stats.top_pages" :key="index">
+                <div class="list-item">
+                    <span class="list-label" x-text="page.path"></span>
+                    <span class="list-value" x-text="formatNumber(page.views) + ' vues'"></span>
+                </div>
+            </template>
+        </div>
+
+        <!-- Top Referrers -->
+        <div class="top-list">
+            <h3>🔗 Top Referrers</h3>
+            <template x-for="(ref, index) in stats.top_referrers" :key="index">
+                <div class="list-item">
+                    <span class="list-label" x-text="ref.referrer || 'Direct'"></span>
+                    <span class="list-value" x-text="formatNumber(ref.count)"></span>
+                </div>
+            </template>
+        </div>
+
+        <!-- Top Languages -->
+        <div class="top-list">
+            <h3>🌍 Top Countries</h3>
+            <template x-for="(country, index) in stats.top_countries" :key="index">
+                <div class="list-item">
+                    <span class="list-label" x-text="country.country.toUpperCase()"></span>
+                    <span class="list-value" x-text="formatNumber(country.count)"></span>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
 {{ end }}
 {{ define "admin_analytics_scripts" }}
-    <script>
-        function analyticsApp() {
-            return {
-                stats: {},
-                loading: true,
-                error: null,
-                chart: null,
+<script>
+    function analyticsApp() {
+        return {
+            stats: {},
+            loading: true,
+            error: null,
+            chart: null,
 
-                async init() {
-                    await this.fetchStats();
-                },
+            async init() {
+                await this.fetchStats();
+            },
 
-                async fetchStats() {
-                    try {
-                        this.loading = true;
-                        this.error = null;
+            async fetchStats() {
+                try {
+                    this.loading = true;
+                    this.error = null;
 
-                        const response = await fetch('/admin/stats');
-                        if (!response.ok) {
-                            throw new Error('Erreur lors de la récupération des statistiques');
-                        }
-
-                        this.stats = await response.json();
-                        
-                        // Attendre que Alpine.js ait rendu le DOM
-                        await this.$nextTick();
-                        
-                        // Créer le graphique
-                        this.createChart();
-                    } catch (err) {
-                        this.error = err.message;
-                        console.error('Error fetching stats:', err);
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                createChart() {
-                    const ctx = document.getElementById('dailyChart');
-                    if (!ctx || !this.stats.daily_stats) return;
-
-                    // Détruire le graphique existant si nécessaire
-                    if (this.chart) {
-                        this.chart.destroy();
+                    const response = await fetch('/admin/stats');
+                    if (!response.ok) {
+                        throw new Error('Erreur lors de la récupération des statistiques');
                     }
 
-                    const labels = this.stats.daily_stats.map(d => {
-                        const date = new Date(d.date);
-                        return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-                    });
+                    this.stats = await response.json();
+                    console.log('Fetched stats:', this.stats);
 
-                    const pageViewsData = this.stats.daily_stats.map(d => d.page_views);
-                    const visitorsData = this.stats.daily_stats.map(d => d.unique_visitors);
+                    // Attendre que Alpine.js ait rendu le DOM
+                    await this.$nextTick();
 
-                    this.chart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: labels,
-                            datasets: [
-                                {
-                                    label: 'Pages vues',
-                                    data: pageViewsData,
-                                    borderColor: '#2563eb',
-                                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                                    tension: 0.4,
-                                    fill: true
-                                },
-                                {
-                                    label: 'Visiteurs uniques',
-                                    data: visitorsData,
-                                    borderColor: '#10b981',
-                                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                    tension: 0.4,
-                                    fill: true
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            plugins: {
-                                legend: {
-                                    display: true,
-                                    position: 'top',
-                                },
-                                tooltip: {
-                                    mode: 'index',
-                                    intersect: false,
-                                }
+                    // Créer le graphique
+                    this.createChart();
+                } catch (err) {
+                    this.error = err.message;
+                    console.error('Error fetching stats:', err);
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            createChart() {
+                const ctx = document.getElementById('dailyChart');
+                if (!ctx || !this.stats.daily_stats) return;
+
+                // Détruire le graphique existant si nécessaire
+                if (this.chart) {
+                    this.chart.destroy();
+                    this.chart = null;
+                }
+
+                const sortedStats = [...this.stats.daily_stats].sort((a, b) => {
+                    return new Date(a.date) - new Date(b.date);
+                });
+
+                const labels = sortedStats.map(d => {
+                    const date = new Date(d.date);
+                    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+                });
+
+                const pageViewsData = sortedStats.map(d => d.page_views);
+                const visitorsData = sortedStats.map(d => d.unique_visitors);
+
+                this.chart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Pages vues',
+                                data: pageViewsData,
                             },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        precision: 0
-                                    }
+                            {
+                                label: 'Visiteurs uniques',
+                                data: visitorsData,
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top',
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
                                 }
                             }
                         }
-                    });
-                },
+                    }
+                });
+            },
 
-                formatNumber(num) {
-                    if (!num) return '0';
-                    return num.toLocaleString('fr-FR');
-                }
+            formatNumber(num) {
+                if (!num) return '0';
+                return num.toLocaleString('fr-FR');
             }
         }
-    </script>
+    }
+</script>
 {{ end }}

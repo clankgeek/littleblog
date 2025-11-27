@@ -81,6 +81,7 @@ database:
   #dsn: mon_utilisateur:motdepasse_utilisateur@unix(/var/run/mysqld/mysqld.sock)/ma_base?charset=utf8mb4&parseTime=True&loc=Local
 analytics:
   enabled: true # active l'analytics pour avoir quelques stats sur les visites
+  geoippath: ./GeoLite2-Country.mmdb # chemin vers la db GeoIP2 Country de MaxMind, si vide, pas de géolocalisation des IP
   db: sqlite # si vide, utilise la base de database.db ou mysql
   path: ./analytics.db # db pour analytics
   #dsn: mon_utilisateur:motdepasse_utilisateur@tcp(127.0.0.1:3306)/analytics?charset=utf8mb4&parseTime=True&loc=Local

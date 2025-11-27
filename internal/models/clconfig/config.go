@@ -24,11 +24,12 @@ type Config struct {
 }
 
 type AnalyticsConfig struct {
-	Enabled bool        `yaml:"enabled"`
-	Db      string      `yaml:"db"`
-	Path    string      `yaml:"path"`
-	Dsn     string      `yaml:"dsn"`
-	Redis   RedisConfig `yaml:"redis"`
+	Enabled   bool        `yaml:"enabled"`
+	Db        string      `yaml:"db"`
+	Path      string      `yaml:"path"`
+	Dsn       string      `yaml:"dsn"`
+	Redis     RedisConfig `yaml:"redis"`
+	GeoIpPath string      `yaml:"geoippath"`
 }
 
 type RedisConfig struct {
@@ -264,6 +265,9 @@ func DisplayConfiguration(config *Config, version string) {
 			logPrintf("  	• La base est la même que la principale")
 		}
 		logPrintf("  	• Redis addr %s", config.Analytics.Redis.Addr)
+		if config.Analytics.GeoIpPath != "" {
+			logPrintf("  	• GeoIP path %s", config.Analytics.GeoIpPath)
+		}
 	} else {
 		logPrintf("  • Analytics désactivé")
 	}
