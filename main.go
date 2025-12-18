@@ -406,10 +406,11 @@ func setRoutes(r *gin.Engine, analytics bool, analyticsMiddleware *clmiddleware.
 	// Route statiques
 	r.Static("/static/", lb.Configuration.StaticPath)
 
-	r.GET("/robot.txt", func(c *gin.Context) {
+	r.GET("/robots.txt", func(c *gin.Context) {
 		c.Header("Content-Type", "text/plain")
 		c.String(200, `User-agent: *
-Allow: /`)
+Allow: /
+Disallow: /admin/`)
 	})
 
 	r.GET("/files/css/*.css", ServeMinifiedStatic(m))
