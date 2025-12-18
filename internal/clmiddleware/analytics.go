@@ -91,7 +91,7 @@ func (am *AnalyticsMiddleware) Middleware() gin.HandlerFunc {
 		if strings.HasPrefix(c.Request.URL.Path, "/static/") ||
 			strings.HasPrefix(c.Request.URL.Path, "/admin/") ||
 			strings.HasPrefix(c.Request.URL.Path, "/files/") ||
-			strings.HasPrefix(c.Request.URL.Path, "/robot.txt") ||
+			strings.HasPrefix(c.Request.URL.Path, "/robots.txt") ||
 			strings.HasPrefix(c.Request.URL.Path, "/api/") {
 			c.Next()
 			return
