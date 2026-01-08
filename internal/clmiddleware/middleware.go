@@ -34,11 +34,16 @@ func InitMiddleware(r *gin.Engine, lb *clblog.Littleblog) *AnalyticsMiddleware {
 	// Configuration des sessions
 	r.Use(NewSession(lb.Configuration.Production))
 
-	// Calculate time elapsed
-	r.Use(RenderTime())
+	// Security Headers
+	if lb.Configuration.Production {
+		r.Use(SecurityHeaders())
+	}
 
 	// CORS
 	r.Use(CORS)
+
+	// Calculate time elapsed
+	r.Use(RenderTime())
 
 	if lb.Configuration.Analytics.Enabled {
 		analyticsMiddleware := NewAnalyticsMiddleware(lb)
@@ -49,10 +54,29 @@ func InitMiddleware(r *gin.Engine, lb *clblog.Littleblog) *AnalyticsMiddleware {
 	return &AnalyticsMiddleware{}
 }
 
+func SecurityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data:; style-src 'self' 'unsafe-inline'")
+		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("X-XSS-Protection", "1; mode=block")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()")
+
+		c.Next()
+	}
+}
+
 func CORS(c *gin.Context) {
-	c.Header("Access-Control-Allow-Origin", "*")
+	host, found := c.Get("hostname")
+	if found && host.(string) != "" {
+		c.Header("Access-Control-Allow-Origin", fmt.Sprintf("https://%s", host.(string)))
+	} else {
+		c.Header("Access-Control-Allow-Origin", "*")
+	}
 	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	c.Header("Access-Control-Allow-Headers", "Content-Length, Content-Type, Authorization")
 
 	if c.Request.Method == "OPTIONS" {
 		c.AbortWithStatus(204)

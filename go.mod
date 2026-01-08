@@ -16,7 +16,7 @@ require (
 	github.com/tdewolff/minify/v2 v2.24.8
 	github.com/ulule/limiter/v3 v3.11.2
 	github.com/writeas/go-strip-markdown v2.0.1+incompatible
-	github.com/yuin/goldmark v1.7.13
+	github.com/yuin/goldmark v1.7.16
 	github.com/yuin/goldmark-emoji v1.0.6
 	golang.org/x/image v0.34.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -55,7 +55,7 @@ require (
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-sqlite3 v1.14.32 // indirect
+	github.com/mattn/go-sqlite3 v1.14.33 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/oschwald/maxminddb-golang/v2 v2.1.1 // indirect
