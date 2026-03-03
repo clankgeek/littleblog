@@ -21,7 +21,7 @@ func NewAnalyticsHandler(service *clanalytics.AnalyticsService) *AnalyticsHandle
 // GetStats30Days retourne les statistiques des 30 derniers jours
 func (ah *AnalyticsHandler) GetStats30Days(c *gin.Context) {
 	item := clblog.GetInstance().GetConfItem(c, false, 0)
-	stats, err := ah.service.GetStats30Days(item.Id)
+	stats, err := ah.service.GetStats30Days(c, item.Id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to retrieve analytics",

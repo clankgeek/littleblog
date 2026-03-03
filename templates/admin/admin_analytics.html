@@ -25,7 +25,7 @@
 </html>
 {{ end }}
 {{ define "admin_analytics_content" }}
-<div class="container" x-data="analyticsApp()" x-init="init()">
+<div class="container" x-data="analyticsApp()">
     <h1>📊 Statistiques des 30 derniers jours</h1>
 
     <!-- Loading state -->
@@ -125,23 +125,20 @@
                     console.log('Fetched stats:', this.stats);
 
                     // Attendre que Alpine.js ait rendu le DOM
+                    this.loading = false;
                     await this.$nextTick();
-
-                    // Créer le graphique
                     this.createChart();
                 } catch (err) {
                     this.error = err.message;
                     console.error('Error fetching stats:', err);
-                } finally {
-                    this.loading = false;
                 }
+                this.loading = false;
             },
 
             createChart() {
                 const ctx = document.getElementById('dailyChart');
                 if (!ctx || !this.stats.daily_stats) return;
 
-                // Détruire le graphique existant si nécessaire
                 if (this.chart) {
                     this.chart.destroy();
                     this.chart = null;

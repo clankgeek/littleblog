@@ -3,9 +3,11 @@ package clanalytics
 import (
 	"context"
 	"fmt"
+	"littleblog/internal/models/clblog"
 	"log"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
@@ -58,7 +60,7 @@ type DailyStat struct {
 }
 
 // GetStats30Days récupère toutes les statistiques des 30 derniers jours
-func (as *AnalyticsService) GetStats30Days(blogid uint) (*Stats30Days, error) {
+func (as *AnalyticsService) GetStats30Days(ctx *gin.Context, blogid uint) (*Stats30Days, error) {
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
 
 	stats := &Stats30Days{}
@@ -104,10 +106,15 @@ func (as *AnalyticsService) GetStats30Days(blogid uint) (*Stats30Days, error) {
 	stats.TopPages = topPages
 
 	// 5. Top des referrers (10 referrers les plus fréquents)
+	item := clblog.GetInstance().GetConfItem(ctx, true, blogid)
+	hostname := item.Hostname
+	if len(hostname) > 4 && hostname[:4] == "www." {
+		hostname = hostname[4:]
+	}
 	var topReferrers []ReferrerStat
 	err = as.db.Model(&PageView{}).
 		Select("referrer, COUNT(*) as count").
-		Where("created_at >= ?  AND blog_id = ? AND referrer != ''", thirtyDaysAgo, blogid).
+		Where("created_at >= ? AND blog_id = ? AND referrer != '' AND referrer NOT LIKE ?", thirtyDaysAgo, blogid, "%"+hostname+"%").
 		Group("referrer").
 		Order("count DESC").
 		Limit(10).
@@ -121,7 +128,7 @@ func (as *AnalyticsService) GetStats30Days(blogid uint) (*Stats30Days, error) {
 	var topCountries []CountryStat
 	err = as.db.Model(&PageView{}).
 		Select("country, COUNT(*) as count").
-		Where("created_at >= ? AND blog_id = ?", thirtyDaysAgo, blogid).
+		Where("created_at >= ? AND blog_id = ? AND country != 'Unknown'", thirtyDaysAgo, blogid).
 		Group("country").
 		Order("count DESC").
 		Limit(10).
