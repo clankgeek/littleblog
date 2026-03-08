@@ -15,6 +15,7 @@
         {{ template "posts_content" . }}
     </main>
     {{ template "footer" . }}
+    <script src="/files/js/scroll.js?{{ .BuildID }}"></script>
     <script src="/files/js/posts.js?{{ .BuildID }}"></script>
     <script src="/files/js/common.js?{{ .BuildID }}"></script>
 </body>
