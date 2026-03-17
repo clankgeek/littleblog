@@ -43,7 +43,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const VERSION string = "0.8.0"
+const VERSION string = "0.9.0"
 
 // global instance
 var (
