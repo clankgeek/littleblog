@@ -11,5 +11,9 @@
     <link rel="icon" type="image/png" href="{{ .icone }}">
     <link rel="alternate" type="application/rss+xml" title="{{.siteName}}" href="/rss.xml" />
 {{ .rsslink }}
+    <script>
+        (function(){var m=document.cookie.match(/(?:^|;\s*)darkMode=([^;]*)/);if(m&&m[1]==='1'){document.documentElement.classList.add('dark-mode-init');}})();
+    </script>
+    <style>.dark-mode-init body,.dark-mode-init{background-color:#121212;color:#e0e0e0;}</style>
     <script defer src="/files/js/alpine.3.15.5.min.js"></script>
 {{ end }}

@@ -14,6 +14,7 @@ Un blog simple qui n'utilise qu'un seul binaire pour fonctionner.
 - Upload d'images
 - Menu avec différente catégories
 - Analytics pour avoir quelques stats sur les visites, par blogs.
+- Mode sombre / clair
 
 ## Composants
 

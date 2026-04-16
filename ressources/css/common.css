@@ -260,6 +260,334 @@ body {
     border: 1px solid var(--border-color);
 }
 
+/* ===== Dark Mode ===== */
+body.dark-mode {
+    color: #e0e0e0;
+    background-color: #121212;
+}
+
+body.dark-mode .header {
+    background: #1e1e1e;
+    border-bottom-color: #333;
+}
+
+body.dark-mode .stat-card,
+body.dark-mode .article-card,
+body.dark-mode .post-card,
+body.dark-mode .comments-section,
+body.dark-mode .comment-form {
+    background: #1e1e1e;
+    color: #e0e0e0;
+}
+
+body.dark-mode .post-card:hover,
+body.dark-mode .stat-card:hover {
+    background: #252525;
+}
+
+body.dark-mode .comments-header {
+    background: #252525;
+    border-bottom-color: #333;
+    color: #e0e0e0;
+}
+
+body.dark-mode .comment {
+    border-bottom-color: #2d2d2d;
+}
+
+body.dark-mode .comment:hover {
+    background: #252525;
+}
+
+body.dark-mode .comment-date,
+body.dark-mode .comment-content,
+body.dark-mode .no-comments {
+    color: #bbb;
+}
+
+body.dark-mode .post-excerpt,
+body.dark-mode .post-title,
+body.dark-mode .article-content,
+body.dark-mode .username {
+    color: #e0e0e0;
+}
+
+body.dark-mode .article-content h3,
+body.dark-mode .article-content strong {
+    color: #e0e0e0;
+}
+
+body.dark-mode .article-content em {
+    color: #bbb;
+}
+
+body.dark-mode .article-content code {
+    background: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark-mode .article-content table tr:nth-child(even) {
+    background: #252525;
+}
+
+body.dark-mode .article-content table tr:hover {
+    background: #2a2a2a;
+}
+
+body.dark-mode .article-content table th {
+    background: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.dark-mode .article-content blockquote {
+    background: #252525;
+}
+
+body.dark-mode .read-more {
+    background: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.dark-mode .footer {
+    background: #0e0e0e;
+    color: #aaa;
+}
+
+body.dark-mode .search-input {
+    background: #2d2d2d;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+body.dark-mode .search-results {
+    background: #2d2d2d;
+    border-color: #444;
+}
+
+body.dark-mode .search-result {
+    color: #e0e0e0;
+}
+
+body.dark-mode .search-result:hover {
+    background: #383838;
+}
+
+/* Bouton toggle dark mode */
+.dark-mode-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.3em;
+    padding: 4px 8px;
+    border-radius: var(--border-radius);
+    transition: var(--transition);
+    line-height: 1;
+    color: inherit;
+}
+
+.dark-mode-toggle:hover {
+    background: var(--light-color);
+}
+
+body.dark-mode .dark-mode-toggle:hover {
+    background: #2d2d2d;
+}
+
+/* --- Dark mode: index page --- */
+body.dark-mode .article-header {
+    background: #1e1e1e;
+}
+
+body.dark-mode .stat-label,
+body.dark-mode .article-stats,
+body.dark-mode .article-excerpt,
+body.dark-mode .empty-state,
+body.dark-mode .no-more-posts {
+    color: #bbb;
+}
+
+body.dark-mode .article-skeleton {
+    background: #1e1e1e;
+}
+
+body.dark-mode .skeleton-header,
+body.dark-mode .skeleton-text {
+    background: #2d2d2d;
+}
+
+/* --- Dark mode: header extras --- */
+body.dark-mode .search-result {
+    border-bottom-color: #333;
+}
+
+body.dark-mode .search-result-tags {
+    color: #999;
+}
+
+body.dark-mode .nav-link {
+    color: #ccc;
+}
+
+body.dark-mode .nav-link:hover {
+    background: #2d2d2d;
+}
+
+body.dark-mode .logo,
+body.dark-mode .logo i {
+    color: #e0e0e0;
+}
+
+/* --- Dark mode: posts page --- */
+body.dark-mode .btn-outline {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+body.dark-mode .btn-outline:hover {
+    background: #252525;
+}
+
+body.dark-mode .captcha-container {
+    background: #252525;
+}
+
+body.dark-mode .captcha-image {
+    background: #1e1e1e;
+}
+
+body.dark-mode .article-content del {
+    color: #999;
+}
+
+body.dark-mode .form-control {
+    background: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+/* --- Dark mode: cookie notice --- */
+body.dark-mode #cookie-notice {
+    background-color: #1e1e1e;
+    border-color: #333;
+    color: #ccc;
+}
+
+body.dark-mode .cookie-notice-close {
+    border-color: #444;
+    color: #aaa;
+}
+
+/* --- Dark mode: 404 page --- */
+body.dark-mode .error-card {
+    background: #1e1e1e;
+}
+
+/* --- Dark mode: login page --- */
+body.dark-mode .login-container {
+    background: #1e1e1e;
+}
+
+body.dark-mode .login-subtitle,
+body.dark-mode .credentials-hint {
+    color: #bbb;
+}
+
+/* --- Dark mode: admin pages --- */
+body.dark-mode .admin-header {
+    background: #1e1e1e;
+}
+
+body.dark-mode .section,
+body.dark-mode .posts-container,
+body.dark-mode .form-main,
+body.dark-mode .sidebar-card,
+body.dark-mode .modal,
+body.dark-mode .emoji-picker,
+body.dark-mode .chart-container,
+body.dark-mode .top-list {
+    background: #1e1e1e;
+    color: #e0e0e0;
+}
+
+body.dark-mode .recent-post {
+    border-bottom-color: #2d2d2d;
+}
+
+body.dark-mode .recent-post:hover,
+body.dark-mode .table tr:hover {
+    background: #252525;
+}
+
+body.dark-mode .post-meta,
+body.dark-mode .post-excerpt,
+body.dark-mode .form-help,
+body.dark-mode .modal-content,
+body.dark-mode .emoji-category-title,
+body.dark-mode .list-label,
+body.dark-mode .chart-title,
+body.dark-mode .top-list h3 {
+    color: #bbb;
+}
+
+body.dark-mode .table th,
+body.dark-mode .table td {
+    border-bottom-color: #2d2d2d;
+}
+
+body.dark-mode .editor-toolbar {
+    background: #252525;
+}
+
+body.dark-mode .toolbar-btn {
+    background: #1e1e1e;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark-mode .toolbar-btn:hover,
+body.dark-mode .emoji-grid button:hover {
+    background: #2d2d2d;
+}
+
+body.dark-mode .preview-area {
+    background: #252525;
+    color: #e0e0e0;
+}
+
+body.dark-mode .preview-area code {
+    background: #2d2d2d;
+}
+
+body.dark-mode .filters select,
+body.dark-mode .filters button,
+body.dark-mode .pagination button {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+body.dark-mode .bulk-actions {
+    background: #252525;
+}
+
+body.dark-mode .comment-card {
+    background: #1e1e1e;
+}
+
+body.dark-mode .comment-card .comment-author {
+    color: #e0e0e0;
+}
+
+body.dark-mode .comment-card .comment-content {
+    color: #bbb;
+}
+
+body.dark-mode .list-item {
+    border-bottom-color: #333;
+}
+
 /* Animations communes */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(20px); }

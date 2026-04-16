@@ -1,3 +1,48 @@
+// ===== Dark Mode =====
+(function () {
+    function getDarkModeCookie() {
+        var match = document.cookie.match(/(?:^|;\s*)darkMode=([^;]*)/);
+        return match ? match[1] : null;
+    }
+
+    function setDarkModeCookie(value) {
+        var expires = new Date();
+        expires.setFullYear(expires.getFullYear() + 1);
+        document.cookie = 'darkMode=' + value + '; path=/; expires=' + expires.toUTCString() + '; SameSite=Lax';
+    }
+
+    function applyDarkMode(enabled) {
+        if (enabled) {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+        var btn = document.getElementById('dark-mode-toggle');
+        if (btn) {
+            btn.textContent = enabled ? '☀️' : '🌙';
+            btn.title = enabled ? 'Passer en mode clair' : 'Passer en mode sombre';
+        }
+    }
+
+    // Apply on load from cookie
+    var saved = getDarkModeCookie();
+    if (saved === '1') {
+        document.body.classList.add('dark-mode');
+    }
+    // Remove flash-prevention class from <html>
+    document.documentElement.classList.remove('dark-mode-init');
+
+    window.toggleDarkMode = function () {
+        var isDark = document.body.classList.contains('dark-mode');
+        setDarkModeCookie(isDark ? '0' : '1');
+        applyDarkMode(!isDark);
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        applyDarkMode(document.body.classList.contains('dark-mode'));
+    });
+})();
+
 // Scripts globaux
 document.addEventListener('alpine:init', () => {
     // Recherche globale

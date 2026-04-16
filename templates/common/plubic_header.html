@@ -5,6 +5,7 @@
             <div class="header-logo">
                 {{- if .logo }}<img src="{{ .logo }}?{{ .BuildID }}" class="logoimg" alt="logo">{{- end }}
                 <a href="/" class="logo">{{ .siteName }} <i style="font-size: 0.5em;">{{ .description }}</i></a>
+                <button id="dark-mode-toggle" class="dark-mode-toggle" onclick="toggleDarkMode()" title="Passer en mode sombre">🌙</button>
             </div>
             <div class="nav-actions">
                 {{ if .showSearch }}
@@ -26,7 +27,7 @@
                     </div>
                 </div>
                 {{ end }}
-                
+
                 {{ if .isAuthenticated }}
                 <a href="/admin" class="btn btn-primary btn-sm"><img src="/files/img/locked.svg" class="icon"> Administration</a>
                 {{ end }}
