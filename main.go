@@ -43,7 +43,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const VERSION string = "0.9.1"
+const VERSION string = "0.9.2"
 
 // global instance
 var (
@@ -62,8 +62,9 @@ var staticFS embed.FS
 type CreateCommentRequest struct {
 	CaptchaID     string `json:"captchaID"`
 	CaptchaAnswer string `json:"captchaAnswer"`
-	Author        string `json:"author" binding:"required"`
+	Author        string `json:"author"`
 	Content       string `json:"content" binding:"required"`
+	ParentID      *uint  `json:"parentID"`
 }
 
 type LoginRequest struct {
@@ -636,9 +637,14 @@ func postHandler(c *gin.Context) {
 
 	session := sessions.Default(c)
 	isAdmin := session.Get("user_id") != nil
+	adminName := ""
+	if username := session.Get("username"); username != nil {
+		adminName = username.(string)
+	}
 
 	c.HTML(http.StatusOK, "posts", gin.H{
 		"blogId":          item.Id,
+		"username":        adminName,
 		"title":           post.Title,
 		"siteName":        item.SiteName,
 		"logo":            item.Logo,
@@ -1335,18 +1341,63 @@ func addCommentAPI(c *gin.Context) {
 	}
 
 	lb := clblog.GetInstance()
+	adminLogin := ""
+	if lb.Configuration != nil {
+		adminLogin = strings.TrimSpace(lb.Configuration.User.Login)
+	}
 
-	// controle du captcha
-	err := lb.Captcha.VerifyCaptcha(req.CaptchaID, req.CaptchaAnswer)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// L'administrateur connecté commente sous son login, sans captcha ni modération
+	session := sessions.Default(c)
+	isAdmin := session.Get("user_id") != nil
+
+	author := strings.TrimSpace(req.Author)
+	if isAdmin {
+		if username := session.Get("username"); username != nil {
+			author = username.(string)
+		} else {
+			author = adminLogin
+		}
+	} else {
+		// Le login d'administration est réservé
+		if adminLogin != "" && strings.EqualFold(author, adminLogin) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Ce pseudo est réservé"})
+			return
+		}
+
+		// controle du captcha
+		if err := lb.Captcha.VerifyCaptcha(req.CaptchaID, req.CaptchaAnswer); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	if author == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Pseudo requis"})
 		return
 	}
 
+	// Réponse à un commentaire : le parent doit exister, être approuvé et
+	// appartenir au même article. On aplatit au premier niveau de réponse.
+	var parentID *uint
+	if req.ParentID != nil {
+		var parent clposts.Comment
+		if err := lb.Db.Where("post_id = ? AND approved", post.ID).First(&parent, *req.ParentID).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Commentaire parent non trouvé"})
+			return
+		}
+		root := parent.ID
+		if parent.ParentID != nil {
+			root = *parent.ParentID
+		}
+		parentID = &root
+	}
+
 	comment := clposts.Comment{
-		PostID:  post.ID,
-		Author:  strings.TrimSpace(req.Author),
-		Content: strings.TrimSpace(req.Content),
+		PostID:   post.ID,
+		ParentID: parentID,
+		Author:   author,
+		Content:  strings.TrimSpace(req.Content),
+		Approved: isAdmin,
 	}
 
 	result := lb.Db.Create(&comment)

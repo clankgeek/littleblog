@@ -68,6 +68,9 @@
                                 <div class="comment-post" x-show="comment.post">
                                     📝 <span x-text="comment.post?.title"></span>
                                 </div>
+                                <div class="comment-post" x-show="comment.parent_id">
+                                    ↳ <span x-text="'Réponse au commentaire #' + comment.parent_id"></span>
+                                </div>
                             </div>
                         </div>
                         <span class="status-badge" :class="comment.approved ? 'status-approved' : 'status-pending'"

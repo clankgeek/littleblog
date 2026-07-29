@@ -141,6 +141,54 @@ img {
 .comments-list {
     max-height: 500px;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Firefox */
+    scrollbar-width: auto;
+    scrollbar-color: var(--primary-color) rgba(0, 0, 0, 0.08);
+}
+
+/* Ascenseur visible (Chrome / Safari / Edge) */
+.comments-list::-webkit-scrollbar {
+    width: 12px;
+}
+
+.comments-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 6px;
+}
+
+.comments-list::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 6px;
+}
+
+.comments-list::-webkit-scrollbar-thumb:hover {
+    background: var(--dark-color);
+    background-clip: content-box;
+}
+
+/* Indique qu'il reste des commentaires sous le pli */
+.comments-list-wrapper {
+    position: relative;
+}
+
+.comments-list-wrapper::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 12px;
+    bottom: 0;
+    height: 40px;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.95));
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.comments-list-wrapper.has-more::after {
+    opacity: 1;
 }
 
 .comment {
@@ -177,6 +225,55 @@ img {
 .comment-content {
     color: #555;
     line-height: 1.6;
+}
+
+.comment-thread {
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.comment-thread:last-child {
+    border-bottom: none;
+}
+
+.comment-thread .comment {
+    border-bottom: none;
+}
+
+.comment-reply {
+    margin-left: 40px;
+    border-left: 3px solid var(--border-color);
+    padding-top: 15px;
+    padding-bottom: 15px;
+}
+
+.comment-footer {
+    margin-top: 10px;
+}
+
+.btn-reply {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--primary-color);
+    font-size: 0.9em;
+}
+
+.btn-reply:hover {
+    text-decoration: underline;
+}
+
+.reply-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    padding: 10px 15px;
+    border-left: 3px solid var(--primary-color);
+    background: rgba(0, 0, 0, 0.04);
+    font-size: 0.95em;
 }
 
 .no-comments {

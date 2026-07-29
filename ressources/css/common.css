@@ -291,6 +291,18 @@ body.dark-mode .comments-header {
     color: #e0e0e0;
 }
 
+body.dark-mode .comments-list {
+    scrollbar-color: var(--primary-color) #2d2d2d;
+}
+
+body.dark-mode .comments-list::-webkit-scrollbar-track {
+    background: #2d2d2d;
+}
+
+body.dark-mode .comments-list-wrapper::after {
+    background: linear-gradient(to bottom, rgba(30, 30, 30, 0), rgba(30, 30, 30, 0.95));
+}
+
 body.dark-mode .comment {
     border-bottom-color: #2d2d2d;
 }
@@ -303,6 +315,18 @@ body.dark-mode .comment-date,
 body.dark-mode .comment-content,
 body.dark-mode .no-comments {
     color: #bbb;
+}
+
+body.dark-mode .comment-thread {
+    border-bottom-color: #2d2d2d;
+}
+
+body.dark-mode .comment-reply {
+    border-left-color: #333;
+}
+
+body.dark-mode .reply-banner {
+    background: rgba(255, 255, 255, 0.06);
 }
 
 body.dark-mode .post-excerpt,

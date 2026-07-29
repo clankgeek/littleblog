@@ -12,6 +12,7 @@ import (
 type Comment struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	PostID    uint      `json:"post_id" gorm:"not null;index"`
+	ParentID  *uint     `json:"parent_id" gorm:"index"`
 	Author    string    `json:"author" gorm:"not null"`
 	Email     string    `json:"email" gorm:"type:varchar(255)"`
 	Content   string    `json:"content" gorm:"type:text;not null"`
@@ -93,11 +94,17 @@ func (h *ModerationHandler) ApproveComment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Commentaire approuvé", "comment": comment})
 }
 
-// API : Rejeter/Supprimer un commentaire
+// API : Rejeter/Supprimer un commentaire (et ses réponses)
 func (h *ModerationHandler) DeleteComment(c *gin.Context) {
 	id := c.Param("id")
 
-	if err := h.DB.Delete(&Comment{}, id).Error; err != nil {
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("parent_id = ?", id).Delete(&Comment{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&Comment{}, id).Error
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -135,7 +142,13 @@ func (h *ModerationHandler) BulkDelete(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&Comment{}, req.IDs).Error; err != nil {
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("parent_id IN ?", req.IDs).Delete(&Comment{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&Comment{}, req.IDs).Error
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

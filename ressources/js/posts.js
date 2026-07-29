@@ -1,21 +1,87 @@
 document.addEventListener('alpine:init', () => {
-    Alpine.data('postInteractions', (postId) => ({
+    Alpine.data('postInteractions', (postId, isAdmin = false, adminName = '') => ({
         postId: postId,
+        isAdmin: isAdmin,
+        adminName: adminName,
         comments: [],
         showComments: false,
         likeCount: 0,
         isLiked: false,
         loading: false,
         captchaImage: '',
+        replyTo: null,
+        hasMoreComments: false,
         newComment: {
             author: '',
             content: '',
             captchaID: '',
             captchaAnswer: '',
+            parentID: null,
         },
 
         async init() {
+            if (this.isAdmin) {
+                this.newComment.author = this.adminName;
+            }
             await this.loadComments();
+        },
+
+        // Dégradé bas de liste tant qu'il reste des commentaires à faire défiler
+        updateScrollState() {
+            const el = this.$refs.commentsList;
+            if (!el) {
+                this.hasMoreComments = false;
+                return;
+            }
+            this.hasMoreComments = el.scrollHeight - el.scrollTop - el.clientHeight > 8;
+        },
+
+        // L'admin connecté n'a ni pseudo ni captcha à saisir
+        get canSubmit() {
+            if (!this.newComment.content.trim()) {
+                return false;
+            }
+            if (this.isAdmin) {
+                return true;
+            }
+            return !!this.newComment.author.trim() && !!this.newComment.captchaAnswer.trim();
+        },
+
+        // Regroupe les commentaires en fils : racines + réponses ordonnées par date
+        get threads() {
+            const byId = new Map(this.comments.map(c => [c.id, c]));
+            const replies = new Map();
+            const roots = [];
+
+            for (const comment of this.comments) {
+                // Une réponse dont le parent n'est pas visible est affichée en racine
+                if (comment.parent_id && byId.has(comment.parent_id)) {
+                    if (!replies.has(comment.parent_id)) {
+                        replies.set(comment.parent_id, []);
+                    }
+                    replies.get(comment.parent_id).push(comment);
+                } else {
+                    roots.push(comment);
+                }
+            }
+
+            return roots.map(root => ({
+                ...root,
+                replies: replies.get(root.id) || []
+            }));
+        },
+
+        startReply(comment) {
+            this.replyTo = comment;
+            this.newComment.parentID = comment.id;
+            this.$nextTick(() => {
+                this.$refs.commentForm?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+        },
+
+        cancelReply() {
+            this.replyTo = null;
+            this.newComment.parentID = null;
         },
 
         async deleteComment(commentId) {
@@ -25,7 +91,12 @@ document.addEventListener('alpine:init', () => {
                 });
 
                 if (response.ok) {
-                    this.comments = this.comments.filter(c => c.id !== commentId);
+                    // Le serveur supprime aussi les réponses
+                    this.comments = this.comments.filter(c => c.id !== commentId && c.parent_id !== commentId);
+                    if (this.replyTo && this.replyTo.id === commentId) {
+                        this.cancelReply();
+                    }
+                    this.$nextTick(() => this.updateScrollState());
                     window.showNotification('Commentaire supprimé avec succès !', 'success');
                 } else {
                     window.showNotification('Erreur lors de la suppression du commenataire', 'error');
@@ -57,6 +128,7 @@ document.addEventListener('alpine:init', () => {
                 const response = await fetch(`/api/posts/${this.postId}/comments`);
                 if (response.ok) {
                     this.comments = await response.json();
+                    this.$nextTick(() => this.updateScrollState());
                 }
             } catch (error) {
                 console.error('Erreur chargement commentaires:', error);
@@ -65,7 +137,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async addComment() {
-            if (!this.newComment.author.trim() || !this.newComment.content.trim() || !this.newComment.captchaAnswer.trim()) {
+            if (!this.canSubmit) {
                 window.showNotification('Veuillez remplir tous les champs', 'error');
                 return;
             }
@@ -83,8 +155,16 @@ document.addEventListener('alpine:init', () => {
                 if (response.ok) {
                     const comment = await response.json();
                     this.comments.push(comment);
-                    this.newComment = { author: '', content: '', captchaId: '', captchaAnswer: '', captchaImage: '' };
+                    this.newComment = {
+                        author: this.isAdmin ? this.adminName : '',
+                        content: '',
+                        captchaID: '',
+                        captchaAnswer: '',
+                        parentID: null,
+                    };
+                    this.replyTo = null;
                     this.captchaImage = ''
+                    this.$nextTick(() => this.updateScrollState());
                     window.showNotification('Commentaire ajouté avec succès !', 'success');
                 } else {
                     const error = await response.json();

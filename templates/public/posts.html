@@ -51,9 +51,9 @@
         </div>
 
         <!-- Actions avec Alpine.js -->
-        <div x-data="postInteractions({{ .post.ID }})">
+        <div x-data="postInteractions({{ .post.ID }}, {{ if .isAuthenticated }}true{{ else }}false{{ end }}, '{{ .username }}')">
             <div class="actions">
-                <button @click="showComments = !showComments" 
+                <button @click="showComments = !showComments; $nextTick(() => updateScrollState())"
                         class="btn btn-outline">
                     <span><img src="/files/img/ballon.svg" class="icon"></span>
                     <span x-text="comments.length + ' commentaires'"></span>
@@ -86,17 +86,45 @@
                     <span x-text="'💬 Commentaires (' + comments.length + ')'"></span>
                 </div>
 
-                <div class="comments-list">
-                    <template x-for="comment in comments" :key="comment.id">
-                        <div class="comment">
-                            <div class="comment-header">
-                                <span class="comment-author" x-text="comment.author"></span>
-                                <span class="comment-date" x-text="formatDate(comment.created_at)"></span>
-                                {{- if .isAuthenticated }}
-                                <span class="comment-date"><button @click="deleteComment(comment.id)"><img src="/files/img/waste.svg" class="icon"></button>&nbsp;</span>
-                                {{- end }}
+                <div class="comments-list-wrapper" :class="{ 'has-more': hasMoreComments }">
+                <div class="comments-list"
+                     x-ref="commentsList"
+                     @scroll="updateScrollState()">
+                    <template x-for="thread in threads" :key="thread.id">
+                        <div class="comment-thread">
+                            <div class="comment">
+                                <div class="comment-header">
+                                    <span class="comment-author" x-text="thread.author"></span>
+                                    <span class="comment-date" x-text="formatDate(thread.created_at)"></span>
+                                    {{- if .isAuthenticated }}
+                                    <span class="comment-date"><button @click="deleteComment(thread.id)"><img src="/files/img/waste.svg" class="icon"></button>&nbsp;</span>
+                                    {{- end }}
+                                </div>
+                                <div class="comment-content" x-text="thread.content"></div>
+                                <div class="comment-footer">
+                                    <button type="button" class="btn-reply" @click="startReply(thread)">
+                                        <img src="/files/img/ballon.svg" class="icon"> Répondre
+                                    </button>
+                                </div>
                             </div>
-                            <div class="comment-content" x-text="comment.content"></div>
+
+                            <template x-for="reply in thread.replies" :key="reply.id">
+                                <div class="comment comment-reply">
+                                    <div class="comment-header">
+                                        <span class="comment-author" x-text="reply.author"></span>
+                                        <span class="comment-date" x-text="formatDate(reply.created_at)"></span>
+                                        {{- if .isAuthenticated }}
+                                        <span class="comment-date"><button @click="deleteComment(reply.id)"><img src="/files/img/waste.svg" class="icon"></button>&nbsp;</span>
+                                        {{- end }}
+                                    </div>
+                                    <div class="comment-content" x-text="reply.content"></div>
+                                    <div class="comment-footer">
+                                        <button type="button" class="btn-reply" @click="startReply(reply)">
+                                            <img src="/files/img/ballon.svg" class="icon"> Répondre
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </template>
 
@@ -105,19 +133,36 @@
                         <p>Soyez le premier à partager votre avis !</p>
                     </div>
                 </div>
+                </div>
 
                 <!-- Formulaire d'ajout -->
-                <form @submit.prevent="addComment" 
+                <form @submit.prevent="addComment"
                       class="comment-form"
+                      x-ref="commentForm"
                       :class="{ 'loading': loading }">
-                    <h4 style="margin-bottom: 25px; color: var(--dark-color);"><img src="/files/img/tballon.svg" class="icon"> Ajouter un commentaire</h4>
+                    <h4 style="margin-bottom: 25px; color: var(--dark-color);">
+                        <img src="/files/img/tballon.svg" class="icon">
+                        <span x-show="!replyTo">Ajouter un commentaire</span>
+                        <span x-show="replyTo" x-text="'Répondre à ' + (replyTo ? replyTo.author : '')"></span>
+                    </h4>
+                    <div x-show="replyTo" class="reply-banner">
+                        <span x-text="'↳ En réponse à ' + (replyTo ? replyTo.author : '')"></span>
+                        <button type="button" class="btn-reply" @click="cancelReply()">
+                            <img src="/files/img/cross.svg" class="icon"> Annuler la réponse
+                        </button>
+                    </div>
+                    {{- if .isAuthenticated }}
+                    <div class="form-group">
+                        <label class="form-label">Vous commentez en tant que <strong>{{ .username }}</strong></label>
+                    </div>
+                    {{- else }}
                     <div style="color: red;">&#9888; Le commentaire apparaitra après modération.</div>
-                    
+
                     <div class="form-group">
                         <label class="form-label" for="author">Votre pseudo</label>
-                        <input x-model="newComment.author" 
+                        <input x-model="newComment.author"
                                id="author"
-                               type="text" 
+                               type="text"
                                class="form-control"
                                placeholder="Entrez votre pseudo"
                                required>
@@ -150,6 +195,7 @@
                             </button>
                         </div>
                     </div>
+                    {{- end }}
 
                     <div class="form-group">
                         <label class="form-label" for="content">Votre commentaire</label>
@@ -161,7 +207,7 @@
                     </div>
 
                     <button type="submit" 
-                            :disabled="loading || !newComment.author.trim() || !newComment.content.trim() || !newComment.captchaAnswer.trim()"
+                            :disabled="loading || !canSubmit"
                             class="btn btn-primary">
                         <span x-show="!loading"><img src="/files/img/rocket.svg" class="icon"> Publier le commentaire</span>
                         <span x-show="loading"><img src="/files/img/hourglass.svg" class="icon"> Publication en cours...</span>
