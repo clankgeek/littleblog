@@ -100,7 +100,7 @@ func NewSession(production bool) gin.HandlerFunc {
 	store := cookie.NewStore(generateSecretKey())
 	store.Options(sessions.Options{
 		Path:     "/",
-		MaxAge:   86400 * 7,
+		MaxAge:   86400 * 30,
 		HttpOnly: true,
 		Secure:   production,
 	})
