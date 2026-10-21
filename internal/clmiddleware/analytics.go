@@ -97,7 +97,7 @@ func (am *AnalyticsMiddleware) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		referrer := c.Request.Referer()
+		referrer := strings.TrimSuffix(c.Request.Referer(), "/")
 		userAgent := c.Request.UserAgent()
 		ipAddress := am.getClientIP(c)
 		country := am.getCountry(c, ipAddress)

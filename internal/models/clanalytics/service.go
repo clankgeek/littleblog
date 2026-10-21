@@ -111,11 +111,13 @@ func (as *AnalyticsService) GetStats30Days(ctx *gin.Context, blogid uint) (*Stat
 	if len(hostname) > 4 && hostname[:4] == "www." {
 		hostname = hostname[4:]
 	}
+	// Ignore le "/" final pour regrouper "https://x.com/" et "https://x.com" (syntaxe compatible SQLite et MySQL)
+	referrerExpr := "CASE WHEN referrer LIKE '%/' THEN SUBSTR(referrer, 1, LENGTH(referrer) - 1) ELSE referrer END"
 	var topReferrers []ReferrerStat
 	err = as.db.Model(&PageView{}).
-		Select("referrer, COUNT(*) as count").
+		Select(referrerExpr+" as referrer, COUNT(*) as count").
 		Where("created_at >= ? AND blog_id = ? AND referrer != '' AND referrer NOT LIKE ?", thirtyDaysAgo, blogid, "%"+hostname+"%").
-		Group("referrer").
+		Group(referrerExpr).
 		Order("count DESC").
 		Limit(10).
 		Scan(&topReferrers).Error
