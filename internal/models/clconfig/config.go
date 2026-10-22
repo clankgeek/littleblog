@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log/syslog"
 	"os"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
@@ -167,7 +168,24 @@ func WriteConfigYaml(filename string, conf *Config) error {
 		return err
 	}
 
-	return os.WriteFile(filename, data, 0644)
+	if err := os.WriteFile(filename, data, 0600); err != nil {
+		return err
+	}
+	// WriteFile ne modifie pas les droits d'un fichier existant : le hash admin ne doit pas être lisible par tous
+	return os.Chmod(filename, 0600)
+}
+
+// maskDSN masque le mot de passe d'un DSN de la forme user:password@...
+func maskDSN(dsn string) string {
+	at := strings.LastIndex(dsn, "@")
+	if at < 0 {
+		return dsn
+	}
+	colon := strings.Index(dsn[:at], ":")
+	if colon < 0 {
+		return dsn
+	}
+	return dsn[:colon+1] + "***" + dsn[at:]
 }
 
 // Convertir la config YAML en config interne
@@ -249,7 +267,7 @@ func DisplayConfiguration(config *Config, version string) {
 	}
 	if config.Database.Db == "mysql" {
 		logPrintf("  • Type mysql")
-		logPrintf("  • DSN %s", config.Database.Dsn)
+		logPrintf("  • DSN %s", maskDSN(config.Database.Dsn))
 	}
 	if config.Database.Redis.Addr != "" {
 		logPrintf("  • Cache redis %s", config.Database.Redis.Addr)
@@ -260,7 +278,7 @@ func DisplayConfiguration(config *Config, version string) {
 		if config.Analytics.Db == "sqlite" && config.Analytics.Path != "" {
 			logPrintf("  	• Sqlite path %s", config.Analytics.Path)
 		} else if config.Analytics.Db == "mysql" && config.Analytics.Dsn != "" {
-			logPrintf("  	• mysql dsn %s", config.Analytics.Dsn)
+			logPrintf("  	• mysql dsn %s", maskDSN(config.Analytics.Dsn))
 		} else {
 			logPrintf("  	• La base est la même que la principale")
 		}

@@ -50,19 +50,19 @@ func NewAnalyticsMiddleware(lb *clblog.Littleblog) *AnalyticsMiddleware {
 	}
 
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Fatal().Err(err).Msg("Erreur connexion base analytics")
 	}
 
 	err = db.AutoMigrate(&clanalytics.PageView{}, &clanalytics.Visitor{})
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Fatal().Err(err).Msg("Erreur migration base analytics")
 	}
 
 	var geodb *geoip2.Reader
 	if config.Analytics.GeoIpPath != "" {
 		geodb, err = geoip2.Open(config.Analytics.GeoIpPath)
 		if err != nil {
-			log.Fatal().Err(err)
+			log.Fatal().Err(err).Msg("Erreur ouverture base GeoIP")
 		}
 	}
 
@@ -139,32 +139,11 @@ func (am *AnalyticsMiddleware) Middleware() gin.HandlerFunc {
 	}
 }
 
-// getClientIP récupère l'IP réelle du client
+// getClientIP récupère l'IP réelle du client.
+// Gin ne lit les headers de proxy (X-Forwarded-For, CF-Connecting-IP...) que si
+// la requête vient d'un proxy déclaré dans trustedproxies / trustedplatform :
+// lire ces headers directement permettrait à n'importe quel client de falsifier son IP.
 func (am *AnalyticsMiddleware) getClientIP(c *gin.Context) string {
-	// 1. Cloudflare
-	if ip := c.GetHeader("CF-Connecting-IP"); ip != "" {
-		return ip
-	}
-
-	// 2. Cloudflare Enterprise / Akamai
-	if ip := c.GetHeader("True-Client-IP"); ip != "" {
-		return ip
-	}
-
-	// 3. X-Real-IP (Nginx, load balancers)
-	if ip := c.GetHeader("X-Real-IP"); ip != "" {
-		return ip
-	}
-
-	// 4. X-Forwarded-For
-	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	// 5. Fallback Gin (utilise RemoteAddr intelligemment)
 	return c.ClientIP()
 }
 

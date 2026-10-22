@@ -62,12 +62,18 @@ func RssHandler(c *gin.Context) {
 		return
 	}
 
-	// Obtenir l'URL de base depuis la requête
+	// URL de base : hostname configuré du blog, sinon Host de la requête (blog par défaut).
+	// Le schéma n'est pas déduit d'un header client : la production est servie en https
+	// (cookie de session Secure), sinon on se base sur la connexion.
+	host := item.Hostname
+	if host == "" {
+		host = c.Request.Host
+	}
 	scheme := "http"
-	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+	if clblog.GetInstance().Configuration.Production || c.Request.TLS != nil {
 		scheme = "https"
 	}
-	baseURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+	baseURL := fmt.Sprintf("%s://%s", scheme, host)
 
 	// Construire le flux RSS
 	rss := clrss.RSS{

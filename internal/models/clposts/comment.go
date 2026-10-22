@@ -23,13 +23,22 @@ type Comment struct {
 }
 
 type ModerationHandler struct {
-	DB *gorm.DB
+	DB     *gorm.DB
+	blogID func(c *gin.Context) uint
 }
 
-func NewModerationHandler(db *gorm.DB) *ModerationHandler {
+// blogID retourne l'id du blog de la requête : la modération ne voit que les
+// commentaires des articles de ce blog.
+func NewModerationHandler(db *gorm.DB, blogID func(c *gin.Context) uint) *ModerationHandler {
 	return &ModerationHandler{
-		DB: db,
+		DB:     db,
+		blogID: blogID,
 	}
+}
+
+// scope restreint une requête sur Comment aux articles du blog courant
+func (h *ModerationHandler) scope(db *gorm.DB, c *gin.Context) *gorm.DB {
+	return db.Where("post_id IN (?)", h.DB.Model(&Post{}).Select("id").Where("blog_id = ?", h.blogID(c)))
 }
 
 // API : Liste des commentaires à modérer
@@ -38,13 +47,22 @@ func (h *ModerationHandler) GetPendingComments(c *gin.Context) {
 
 	// Paramètres de pagination
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
 	offset := (page - 1) * limit
 
 	// Filtre : all, pending, approved
 	status := c.DefaultQuery("status", "pending")
 
-	query := h.DB.Preload("Post")
+	query := h.scope(h.DB, c).Preload("Post")
 
 	switch status {
 	case "pending":
@@ -63,7 +81,7 @@ func (h *ModerationHandler) GetPendingComments(c *gin.Context) {
 		Limit(limit).
 		Offset(offset).
 		Find(&comments).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur serveur"})
 		return
 	}
 
@@ -80,14 +98,14 @@ func (h *ModerationHandler) ApproveComment(c *gin.Context) {
 	id := c.Param("id")
 
 	var comment Comment
-	if err := h.DB.First(&comment, id).Error; err != nil {
+	if err := h.scope(h.DB, c).First(&comment, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Commentaire non trouvé"})
 		return
 	}
 
 	comment.Approved = true
 	if err := h.DB.Save(&comment).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur serveur"})
 		return
 	}
 
@@ -99,13 +117,13 @@ func (h *ModerationHandler) DeleteComment(c *gin.Context) {
 	id := c.Param("id")
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("parent_id = ?", id).Delete(&Comment{}).Error; err != nil {
+		if err := h.scope(tx, c).Where("parent_id = ?", id).Delete(&Comment{}).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&Comment{}, id).Error
+		return h.scope(tx, c).Delete(&Comment{}, id).Error
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur serveur"})
 		return
 	}
 
@@ -119,12 +137,12 @@ func (h *ModerationHandler) BulkApprove(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Données invalides"})
 		return
 	}
 
-	if err := h.DB.Model(&Comment{}).Where("id IN ?", req.IDs).Update("approved", true).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := h.scope(h.DB.Model(&Comment{}), c).Where("id IN ?", req.IDs).Update("approved", true).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur serveur"})
 		return
 	}
 
@@ -138,18 +156,18 @@ func (h *ModerationHandler) BulkDelete(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Données invalides"})
 		return
 	}
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("parent_id IN ?", req.IDs).Delete(&Comment{}).Error; err != nil {
+		if err := h.scope(tx, c).Where("parent_id IN ?", req.IDs).Delete(&Comment{}).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&Comment{}, req.IDs).Error
+		return h.scope(tx, c).Delete(&Comment{}, req.IDs).Error
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur serveur"})
 		return
 	}
 

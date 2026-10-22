@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"littleblog/internal/models/clblog"
 	"littleblog/internal/models/clconfig"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -87,22 +88,34 @@ func CORS(c *gin.Context) {
 }
 
 func NewLimiter() gin.HandlerFunc {
+	return NewRateLimiter(5, 1*time.Minute)
+}
+
+// NewRateLimiter limite à `limit` requêtes par `period` et par IP cliente.
+// Chaque appel crée son propre compteur, indépendant des autres limiteurs.
+func NewRateLimiter(limit int64, period time.Duration) gin.HandlerFunc {
 	rate := limiter.Rate{
-		Period: 1 * time.Minute,
-		Limit:  5,
+		Period: period,
+		Limit:  limit,
 	}
 	mstore := memory.NewStore()
 	instance := limiter.New(mstore, rate)
 	return ginlimiter.NewMiddleware(instance)
 }
 
+// Durée de la session admin : le cookie est signé mais stateless, il ne peut pas
+// être révoqué côté serveur avant son expiration, on la garde donc courte.
+const sessionMaxAge = 24 * 60 * 60
+
 func NewSession(production bool) gin.HandlerFunc {
 	store := cookie.NewStore(generateSecretKey())
 	store.Options(sessions.Options{
 		Path:     "/",
-		MaxAge:   86400 * 30,
+		MaxAge:   sessionMaxAge,
 		HttpOnly: true,
 		Secure:   production,
+		// Lax : le cookie n'est pas envoyé sur les POST / PUT / DELETE cross-site (protection CSRF de l'admin)
+		SameSite: http.SameSiteLaxMode,
 	})
 	return sessions.Sessions("littleblog", store)
 }
@@ -215,7 +228,7 @@ func generateSecretKey() []byte {
 	key := make([]byte, 32)
 	_, err := rand.Read(key)
 	if err != nil {
-		log.Fatal().Err(err).Str("msg", "Erreur génération clé secrète")
+		log.Fatal().Err(err).Msg("Erreur génération clé secrète")
 	}
 	return key
 }

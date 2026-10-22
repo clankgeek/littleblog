@@ -9,3 +9,9 @@ coverage.out
 coverage.html
 benchmark_results.txt
 
+# Configuration locale (contient le hash admin / DSN) et données
+littleblog.yaml
+*.log
+*.mmdb
+static/uploads/
+

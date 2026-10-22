@@ -25,6 +25,7 @@ import (
 	mrand "math/rand"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -32,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/andskur/argon2-hashing"
 	"github.com/gin-contrib/sessions"
@@ -44,6 +46,20 @@ import (
 )
 
 const VERSION string = "0.9.2"
+
+// limites des commentaires publics
+const (
+	maxCommentBodySize   = 16 * 1024
+	maxCommentAuthorLen  = 50
+	maxCommentContentLen = 5000
+)
+
+// limites des images uploadées
+const (
+	maxUploadBodySize = 11 * 1024 * 1024
+	maxImageDimension = 10000
+	maxImagePixels    = 40_000_000
+)
 
 // global instance
 var (
@@ -119,7 +135,7 @@ func LogError(err error, msg string) {
 
 // Fatal logue une erreur fatale et arrête le programme
 func LogFatal(err error, msg string) {
-	log.Fatal().Err(err).Str("msg", msg)
+	log.Fatal().Err(err).Msg(msg)
 }
 
 func loadAndConvertConfig(configFile string) (*clconfig.Config, error) {
@@ -374,11 +390,13 @@ func newServer() *gin.Engine {
 
 	if configuration.TrustedProxies != nil {
 		r.SetTrustedProxies(configuration.TrustedProxies)
+	} else {
+		LogWarn("trustedproxies absent de la configuration : tous les proxies sont considérés comme fiables, X-Forwarded-For est falsifiable (rate limit contournable)")
 	}
 	if configuration.TrustedPlatform != "" {
 		switch configuration.TrustedPlatform {
 		case "cloudflare":
-			r.TrustedPlatform = gin.PlatformGoogleAppEngine
+			r.TrustedPlatform = gin.PlatformCloudflare
 		case "google":
 			r.TrustedPlatform = gin.PlatformGoogleAppEngine
 		case "flyio":
@@ -403,6 +421,9 @@ func setRoutes(r *gin.Engine, analytics bool, analyticsMiddleware *clmiddleware.
 
 	// middleware rate limiter
 	middlewareLimiter := clmiddleware.NewLimiter()
+	// commentaires : 5 par minute et par IP, captcha / recherche : plus permissif
+	commentLimiter := clmiddleware.NewRateLimiter(5, 1*time.Minute)
+	publicLimiter := clmiddleware.NewRateLimiter(30, 1*time.Minute)
 
 	// Route statiques
 	r.Static("/static/", lb.Configuration.StaticPath)
@@ -425,7 +446,7 @@ Disallow: /admin/`)
 	r.GET("/", indexHandler)
 	r.GET("/:category", indexHandler)
 	r.GET("/post/:id", postHandler)
-	r.GET("/files/captcha", func(c *gin.Context) {
+	r.GET("/files/captcha", publicLimiter, func(c *gin.Context) {
 		lb.Captcha.CaptchaHandler(c, lb.Configuration.Production)
 	})
 
@@ -460,7 +481,9 @@ Disallow: /admin/`)
 			admin.GET("/analytics", adminAnalyticsHandler)
 		}
 
-		moderationHandler := clposts.NewModerationHandler(lb.Db)
+		moderationHandler := clposts.NewModerationHandler(lb.Db, func(c *gin.Context) uint {
+			return lb.GetConfItem(c, false, 0).Id
+		})
 		admin.GET("/moderation", adminModerationPageHandler)
 		moderation := admin.Group("/api/moderation")
 		{
@@ -478,8 +501,8 @@ Disallow: /admin/`)
 		api.GET("/posts", getPostsAPI)
 		api.GET("/posts/:id", getPostAPI)
 		api.GET("/posts/:id/comments", getCommentsAPI)
-		api.POST("/posts/:id/comments", addCommentAPI)
-		api.GET("/search", searchPostsAPI)
+		api.POST("/posts/:id/comments", commentLimiter, addCommentAPI)
+		api.GET("/search", publicLimiter, searchPostsAPI)
 	}
 
 	// Flux RSS
@@ -832,6 +855,9 @@ func getMemUsage() string {
 }
 
 func uploadImageHandler(c *gin.Context) {
+	// corps limité (image 10 Mo + surcoût multipart) avant lecture du formulaire
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadBodySize)
+
 	file, header, err := c.Request.FormFile("image")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Fichier non trouvé"})
@@ -860,6 +886,19 @@ func uploadImageHandler(c *gin.Context) {
 	}
 
 	// Réinitialiser le curseur du fichier
+	file.Seek(0, 0)
+
+	// Vérifier les dimensions avant de décoder : une petite image peut décompresser en
+	// plusieurs Go de pixels (decompression bomb)
+	cfg, _, err := image.DecodeConfig(file)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Image invalide"})
+		return
+	}
+	if cfg.Width > maxImageDimension || cfg.Height > maxImageDimension || cfg.Width*cfg.Height > maxImagePixels {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Image trop grande en pixels (max %d px de côté, %d Mpx)", maxImageDimension, maxImagePixels/1_000_000)})
+		return
+	}
 	file.Seek(0, 0)
 
 	// Décoder l'image
@@ -1016,8 +1055,9 @@ func editPostPageHandler(c *gin.Context) {
 	}
 
 	db := clblog.GetInstance().Db
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 	var post clposts.Post
-	result := db.First(&post, uint(id))
+	result := db.Where("blog_id = ?", item.Id).First(&post, uint(id))
 	if result.Error != nil {
 		c.HTML(http.StatusNotFound, "admin_post_form", gin.H{"title": "Article non trouvé"})
 		return
@@ -1025,7 +1065,6 @@ func editPostPageHandler(c *gin.Context) {
 
 	session := sessions.Default(c)
 	username := session.Get("username")
-	item := clblog.GetInstance().GetConfItem(c, false, 0)
 	c.HTML(http.StatusOK, "admin_post_form", gin.H{
 		"blogId":          item.Id,
 		"title":           "Éditer Article",
@@ -1127,8 +1166,9 @@ func updatePostHandler(c *gin.Context) {
 	}
 
 	db := clblog.GetInstance().Db
+	item := clblog.GetInstance().GetConfItem(c, false, 0)
 	var post clposts.Post
-	result := db.First(&post, uint(id))
+	result := db.Where("blog_id = ?", item.Id).First(&post, uint(id))
 	if result.Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Article non trouvé"})
 		return
@@ -1156,6 +1196,37 @@ func updatePostHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Article mis à jour avec succès"})
+}
+
+// removeUploadedImage supprime le fichier d'une image uploadée (/static/uploads/<blog>/<fichier>).
+// L'URL est convertie en chemin sous StaticPath et le résultat doit rester dans le dossier
+// d'uploads du blog. Une image encore référencée par un autre article est conservée.
+func removeUploadedImage(db *gorm.DB, blogID uint, imgURL string) {
+	urlPrefix := fmt.Sprintf("/static/uploads/%d/", blogID)
+	imgURL = path.Clean(imgURL)
+	if !strings.HasPrefix(imgURL, urlPrefix) {
+		return
+	}
+
+	staticPath := clblog.GetInstance().Configuration.StaticPath
+	uploadsDir := filepath.Join(staticPath, "uploads", strconv.FormatUint(uint64(blogID), 10))
+	file := filepath.Join(staticPath, filepath.FromSlash(strings.TrimPrefix(imgURL, "/static/")))
+	if !strings.HasPrefix(file, uploadsDir+string(filepath.Separator)) {
+		return
+	}
+
+	var others int64
+	db.Model(&clposts.Post{}).Where("blog_id = ? AND content LIKE ?", blogID, "%"+imgURL+"%").Count(&others)
+	if others > 0 {
+		LogPrintf("- Image %s conservée, utilisée par un autre article", imgURL)
+		return
+	}
+
+	if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+		LogError(err, "Suppression de l'image "+imgURL)
+		return
+	}
+	LogPrintf("- Suppression de l'image %s", imgURL)
 }
 
 func deletePostHandler(c *gin.Context) {
@@ -1204,10 +1275,7 @@ func deletePostHandler(c *gin.Context) {
 
 	if imagesFound {
 		for _, img := range images {
-			if strings.HasPrefix(img, fmt.Sprintf("/static/uploads/%d", item.Id)) {
-				LogPrintf("- Suppression de l'image %s", img)
-				os.Remove(img)
-			}
+			removeUploadedImage(db, item.Id, img)
 		}
 	}
 
@@ -1334,9 +1402,21 @@ func addCommentAPI(c *gin.Context) {
 		return
 	}
 
+	// corps limité avant décodage JSON
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxCommentBodySize)
+
 	var req CreateCommentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Données invalides"})
+		return
+	}
+
+	if utf8.RuneCountInString(strings.TrimSpace(req.Author)) > maxCommentAuthorLen {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Pseudo trop long (max %d caractères)", maxCommentAuthorLen)})
+		return
+	}
+	if utf8.RuneCountInString(strings.TrimSpace(req.Content)) > maxCommentContentLen {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Commentaire trop long (max %d caractères)", maxCommentContentLen)})
 		return
 	}
 
